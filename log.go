@@ -14,8 +14,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	newLogger = newLogger.WithOptions(zap.AddCallerSkip(1)).WithOptions(zap.AddStacktrace(zap.FatalLevel))
-	zap.ReplaceGlobals(newLogger)
+	ChangeCallerSkip(1)
 }
 
 // ChangeCallerSkip doc...
