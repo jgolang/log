@@ -9,7 +9,7 @@ func TestLog(*testing.T) {
 
 	hola()
 	hola2()
-	ChangeCallerSkip(2)
+	ChangeCallerSkip(1)
 	hola()
 	hola2()
 	ChangeCallerSkip(-2)
@@ -17,10 +17,4 @@ func TestLog(*testing.T) {
 	hola2()
 }
 
-func hola() {
-	Println("hola")
-}
 
-func hola2() {
-	hola()
-}
