@@ -1,24 +1,16 @@
 package log
 
-import (
-	"log"
+import "os"
 
-	"go.uber.org/zap"
-)
-
-var newLogger *zap.Logger
+var prod bool
 
 func init() {
-	var err error
-	newLogger, err = zap.NewDevelopment()
-	if err != nil {
-		log.Fatal(err)
+	switch mode := os.Getenv("MODE"); mode {
+	case "PROD":
+		prod = true
+	case "DEV":
+		fallthrough
+	default:
+		prod = false
 	}
-	ChangeCallerSkip(1)
-}
-
-// ChangeCallerSkip doc...
-func ChangeCallerSkip(n int) {
-	newLogger = newLogger.WithOptions(zap.AddCallerSkip(n)).WithOptions(zap.AddStacktrace(zap.FatalLevel))
-	zap.ReplaceGlobals(newLogger)
 }
