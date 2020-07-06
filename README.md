@@ -1,4 +1,4 @@
-# Log 
+# Log v1.0.0
 
 Simple, fast, structured and level registration in Go.
 
@@ -18,7 +18,7 @@ package main
 import "github.com/jgolang/log"
 
 func main(){
-    log.Print("My info....")
+    log.Println("My info....")
 }
 ```
 
@@ -44,6 +44,8 @@ You can configure the package depending on your needs to display certain types o
 | DEV | Print all | 
 
 Note: Error logs are printed regardless of this setting.
+
+<hr>
 
 Released under the [GPL-3.0](LICENSE.txt).
 
