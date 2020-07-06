@@ -18,9 +18,13 @@
 //
 // Installation
 //
+// Run command in terminal:
+//
 //  go get -u https://github.com/jgolang/log
 //
 // Quick Start
+//
+// This is a simple example of how the package is implemented with a basic function.
 //
 //  package main
 //
@@ -40,14 +44,11 @@
 // types of log by defining an environment variable on the system that runs
 // your program.
 //
-// [user@ /home]# export MODE="DEV"
+//  [user@ /home]# export MODE="DEV"
 //
-//  Allowed modes
+// Allowed modes
 //
-// | Mode | Description |
-// | :------ | :--: |
-// | PROD | Only prints error log |
-// | DEV | Print all |
+//  PROD | DEV
 //
 // Note: Error logs are printed regardless of this setting.
 package log // import "github.com/jgolang/go"
