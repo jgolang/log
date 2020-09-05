@@ -1,4 +1,4 @@
-# Log v1.0.0
+# Log v1.1.0
 
 Simple, fast, structured and level registration in Go.
 
