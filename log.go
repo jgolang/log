@@ -2,16 +2,25 @@ package log
 
 import "os"
 
-var prod bool
+var std = New(
+	Formater{
+		prodFlag: LstdProdFlags,
+		devFlag:  LstdDevFlags,
+	},
+	Out{
+		wr: os.Stderr,
+	},
+	3)
 
 func init() {
 	// Loads the enviroment mode
 	switch mode := os.Getenv("MODE"); mode {
 	case "PROD":
-		prod = true
+		std.prod = true
 	case "DEV":
 		fallthrough
 	default:
-		prod = false
+		std.prod = false
 	}
+
 }
