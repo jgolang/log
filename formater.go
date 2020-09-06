@@ -103,14 +103,16 @@ func (f Formater) jsonFormat(buf *[]byte, t time.Time, file string, line int, fu
 		*buf = append(*buf, f.additionalInfo...)
 	}
 	if f.prodFlag&(Lcaller) != 0 {
-		pk := getFirstStrSlice(function, '.', 2)
-		fileName := getLastStrSlice(pk, '.', 0)
-		pk = getFirstStrSlice(pk, '.', 1)
+		pk := getLastToFirstStrSlice(function, '/', 0)
+		fl := getLastStrSlice(file, '/', 1)
 		*buf = append(*buf, "\",\"caller\":\""...)
 		*buf = append(*buf, pk...)
-		*buf = append(*buf, '/')
-		*buf = append(*buf, fileName...)
-		*buf = append(*buf, ".go"...)
+		*buf = append(*buf, fl...)
+
+		// *buf = append(*buf, pk...)
+		// *buf = append(*buf, '/')
+		// *buf = append(*buf, fileName...)
+		// *buf = append(*buf, ".go"...)
 		*buf = append(*buf, ':')
 		itoa(buf, int64(line), 2)
 	}
