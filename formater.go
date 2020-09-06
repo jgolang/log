@@ -190,7 +190,6 @@ func (f Formater) terminalFormat(buf *[]byte, t time.Time, file string, line int
 		pk := getLastToFirstStrSlice(function, '/', 0)
 		fl := getLastStrSlice(file, '/', 1)
 		*buf = append(*buf, pk...)
-		*buf = append(*buf, '/')
 		*buf = append(*buf, fl...)
 		if f.devFlag&(Lline) != 0 {
 			*buf = append(*buf, ':')

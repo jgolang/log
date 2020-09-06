@@ -103,7 +103,7 @@ func getLastToFirstStrSlice(s string, substr byte, jump int) string {
 				flag++
 				continue
 			}
-			str = s[:i]
+			str = s[:i+1]
 			break
 		}
 	}
