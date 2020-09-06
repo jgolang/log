@@ -56,7 +56,6 @@ func (l *Logger) Output(calldepth int, p priority, template string, args []inter
 	} else if s != "" && len(args) > 0 {
 		s = fmt.Sprintf(template, args...)
 	}
-	s = strings.Replace(s, "\"", "\\\"", -1)
 	now := time.Now() // get this early.
 	pc, file, line, ok := runtime.Caller(calldepth)
 	if !ok {

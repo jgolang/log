@@ -2,6 +2,7 @@ package log
 
 import (
 	"os"
+	"strings"
 	"time"
 )
 
@@ -128,7 +129,9 @@ func (f Formater) jsonFormat(buf *[]byte, t time.Time, file string, line int, fu
 		*buf = append(*buf, funcName...)
 	}
 	*buf = append(*buf, "\",\"msg\":\""...)
-	*buf = append(*buf, []byte(s)...)
+	s = strings.Replace(s, "\n", "", -1)
+	s = strings.Replace(s, "\"", "\\\"", -1)
+	*buf = append(*buf, s...)
 	if stack != nil && f.prodFlag&(Lstack) != 0 {
 		*buf = append(*buf, "\",\"stack\":["...)
 		len := len(stack)
