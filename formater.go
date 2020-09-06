@@ -187,9 +187,8 @@ func (f Formater) terminalFormat(buf *[]byte, t time.Time, file string, line int
 		*buf = append(*buf, ':')
 		itoa(buf, int64(line), 2)
 	} else if f.devFlag&(Lfile) != 0 {
-		pk := getFirstStrSlice(function, '.', 2)
-		pk = getFirstStrSlice(pk, '.', 1)
-		fl := getLastStrSlice(file, '/', 0)
+		pk := getLastToFirstStrSlice(function, '/', 0)
+		fl := getLastStrSlice(file, '/', 1)
 		*buf = append(*buf, pk...)
 		*buf = append(*buf, '/')
 		*buf = append(*buf, fl...)

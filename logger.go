@@ -94,6 +94,22 @@ func getLastStrSlice(s string, substr byte, jump int) string {
 	return str
 }
 
+func getLastToFirstStrSlice(s string, substr byte, jump int) string {
+	var str string
+	flag := 0
+	for i := len(s) - 1; i > 0; i-- {
+		if s[i] == substr {
+			if flag < jump {
+				flag++
+				continue
+			}
+			str = s[:i]
+			break
+		}
+	}
+	return str
+}
+
 func getFirstStrSlice(s string, substr byte, jump int) string {
 	var str string
 	flag := 0
