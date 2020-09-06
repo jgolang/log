@@ -128,7 +128,7 @@ func (f Formater) jsonFormat(buf *[]byte, t time.Time, file string, line int, fu
 		*buf = append(*buf, funcName...)
 	}
 	*buf = append(*buf, "\",\"msg\":\""...)
-	*buf = append(*buf, s...)
+	*buf = append(*buf, []byte(s)...)
 	if stack != nil && f.prodFlag&(Lstack) != 0 {
 		*buf = append(*buf, "\",\"stack\":["...)
 		len := len(stack)
