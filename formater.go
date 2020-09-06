@@ -174,7 +174,6 @@ func (f Formater) terminalFormat(buf *[]byte, t time.Time, file string, line int
 			itoa(buf, int64(t.Nanosecond()/1e3), 6)
 		}
 		*buf = append(*buf, '\t')
-		*buf = append(*buf, '\t')
 	}
 	if f.devFlag&(Llevel) != 0 {
 		*buf = append(*buf, getTypeMsg(false, p)...)
