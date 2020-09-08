@@ -315,9 +315,9 @@ func (l *Logger) Infof(template string, args ...interface{}) {
 // StackTrace allows you to view the exact place where the error or incident originated within the code.
 // Shows a trace of up to 10 layers from where the error or incident was generated.
 func (l *Logger) StackTrace(v interface{}) {
-	stackTrace := GetStackTrace(l.calldepth)
+	stackTrace := GetStackTrace(l.calldepth + 1)
 	args := []interface{}{v}
-	l.Output(l.calldepth, getPriority(v), "%v\n", args, stackTrace)
+	l.Output(l.calldepth, getPriority(v), "", args, stackTrace)
 	return
 }
 
