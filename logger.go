@@ -67,6 +67,9 @@ func (l *Logger) Output(calldepth int, p priority, template string, args []inter
 	defer l.mu.Unlock()
 	l.buf = l.buf[:0]
 	if l.prod {
+		if p < 2 {
+			return nil
+		}
 		l.formater.Production(&l.buf, now, file, line, f.Name(), p, s, stack)
 	} else {
 		l.formater.Development(&l.buf, now, file, line, f.Name(), p, s, stack)

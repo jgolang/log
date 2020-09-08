@@ -49,9 +49,6 @@ type Formater struct {
 
 // Production doc
 func (f Formater) Production(buf *[]byte, t time.Time, file string, line int, function string, p priority, s string, stack [][]byte) {
-	if p < 2 {
-		return
-	}
 	if f.prodFlag&(TerminalFormat) != 0 {
 		f.terminalFormat(buf, t, file, line, function, p, s, stack)
 		return
