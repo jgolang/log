@@ -346,3 +346,11 @@ func (l *Logger) DevelopmentMode() {
 func (l *Logger) SetCalldepth(calldepth int) {
 	l.calldepth = calldepth
 }
+
+// GetMode doc ...
+func (l *Logger) GetMode() string {
+	if l.prod {
+		return "PROD"
+	}
+	return "DEV"
+}

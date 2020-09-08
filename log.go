@@ -2,25 +2,26 @@ package log
 
 import "os"
 
-var std = New(
-	Formater{
-		prodFlag: LstdProdFlags,
-		devFlag:  LstdDevFlags,
-	},
-	Out{
-		wr: os.Stderr,
-	},
-	3)
+var std *Logger
 
 func init() {
+	std = New(
+		Formater{
+			prodFlag: LstdProdFlags,
+			devFlag:  LstdDevFlags,
+		},
+		Out{
+			wr: os.Stderr,
+		},
+		3)
 	// Loads the enviroment mode
 	switch mode := os.Getenv("MODE"); mode {
 	case "PROD":
-		std.prod = true
+		ProductionMode()
 	case "DEV":
 		fallthrough
 	default:
-		std.prod = false
+		DevelopmentMode()
 	}
 
 }
@@ -49,4 +50,9 @@ func DevelopmentMode() {
 // to ascend, with 0 identifying the caller of Caller for default loggin
 func SetCalldepth(calldepth int) {
 	std.SetCalldepth(calldepth)
+}
+
+// GetMode doc ...
+func GetMode() string {
+	return std.GetMode()
 }
