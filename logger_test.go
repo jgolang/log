@@ -7,5 +7,6 @@ import (
 )
 
 func TestLogger_Output(t *testing.T) {
+	log.ProductionMode()
 	log.Error("Test message")
 }

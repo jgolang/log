@@ -52,7 +52,17 @@ func SetCalldepth(calldepth int) {
 	std.SetCalldepth(calldepth)
 }
 
+// OverrideConfig set a new configuration
+func OverrideConfig(devFlags, prodFlags int, additionalInfo string) {
+	std.SetNewFormat(NewFormaterConfig(devFlags, prodFlags, additionalInfo))
+}
+
 // GetMode doc ...
 func GetMode() string {
 	return std.GetMode()
+}
+
+// NewFormaterConfig doc ...
+func NewFormaterConfig(devFlag, prodFlag int, additionalInfo string) Formater {
+	return Formater{devFlag: devFlag, prodFlag: prodFlag, additionalInfo: additionalInfo}
 }

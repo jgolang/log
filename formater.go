@@ -209,8 +209,3 @@ func (f Formater) terminalFormat(buf *[]byte, t time.Time, file string, line int
 		*buf = append(*buf, "\n---"...)
 	}
 }
-
-// NewFormaterConfig doc ...
-func NewFormaterConfig(devFlag, prodFlag int, additionalInfo string) Formater {
-	return Formater{devFlag: devFlag, prodFlag: prodFlag, additionalInfo: additionalInfo}
-}
