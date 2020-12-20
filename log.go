@@ -1,20 +1,21 @@
 package log
 
-import "os"
+import (
+	"os"
+)
 
-var std *Logger
+var std = New(
+	Formater{
+		prodFlag: LstdProdFlags,
+		devFlag:  LstdDevFlags,
+	},
+	Out{
+		wr: os.Stderr,
+	},
+	3)
 
 func init() {
-	std = New(
-		Formater{
-			prodFlag: LstdProdFlags,
-			devFlag:  LstdDevFlags,
-		},
-		Out{
-			wr: os.Stderr,
-		},
-		3)
-	// Loads the enviroment mode
+	// Load enviroment mode
 	switch mode := os.Getenv("MODE"); mode {
 	case "PROD":
 		ProductionMode()
@@ -23,7 +24,6 @@ func init() {
 	default:
 		DevelopmentMode()
 	}
-
 }
 
 // SetNewFormat configure your custom outputs development and production format for default loggin

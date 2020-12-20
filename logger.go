@@ -9,11 +9,11 @@ import (
 	"time"
 )
 
-// A priority is a logging priority. Higher levels are more important.
-type priority int8
+// Priority is a logging priority. Higher levels are more important.
+type Priority int8
 
 const (
-	debugPriority priority = iota - 1
+	debugPriority Priority = iota - 1
 	infoPriority
 	warnPriority
 	errorPriority
@@ -39,8 +39,8 @@ type Logger struct {
 // destination to which log data will be written.
 // The prefix appears at the beginning of each generated log line.
 // The flag argument defines the logging properties.
-func New(f Formater, out Out, calldepth int) *Logger {
-	return &Logger{out: out, formater: f, calldepth: calldepth}
+func New(f Formater, out Out, calldepth int) Logger {
+	return Logger{out: out, formater: f, calldepth: calldepth}
 }
 
 // Output writes the output for a logging event. The string s contains
@@ -49,7 +49,7 @@ func New(f Formater, out Out, calldepth int) *Logger {
 // already a newline. Calldepth is used to recover the PC and is
 // provided for generality, although at the moment on all pre-defined
 // paths it will be 2.z
-func (l *Logger) Output(calldepth int, p priority, template string, args []interface{}, stack [][]byte) error {
+func (l *Logger) Output(calldepth int, p Priority, template string, args []interface{}, stack [][]byte) error {
 	s := template
 	if s == "" && len(args) > 0 {
 		s = fmt.Sprint(args...)
@@ -129,7 +129,8 @@ func getFirstStrSlice(s string, substr byte, jump int) string {
 	return str
 }
 
-func getTypeMsg(prod bool, p priority) string {
+// GetTypeMsg get message type
+func GetTypeMsg(prod bool, p Priority) string {
 	if prod {
 		switch p {
 		case debugPriority:
@@ -170,7 +171,8 @@ func getTypeMsg(prod bool, p priority) string {
 	}
 }
 
-func getPriority(v interface{}) priority {
+// GetPriority message
+func GetPriority(v interface{}) Priority {
 	switch v.(type) {
 	case error:
 		return errorPriority
@@ -317,7 +319,7 @@ func (l *Logger) Infof(template string, args ...interface{}) {
 func (l *Logger) StackTrace(v interface{}) {
 	stackTrace := GetStackTrace(l.calldepth + 1)
 	args := []interface{}{v}
-	l.Output(l.calldepth, getPriority(v), "", args, stackTrace)
+	l.Output(l.calldepth, GetPriority(v), "", args, stackTrace)
 	return
 }
 

@@ -1,12 +1,14 @@
-package log
+package log_test
 
 import (
 	"testing"
+
+	"github.com/jgolang/log"
 )
 
+func init() {
+}
+
 func TestLogger_Output(t *testing.T) {
-	func() {
-		std.SetNewFormat(NewFormaterConfig(LstdDevFlags, LstdProdFlags, "test"))
-		Info(std.GetMode())
-	}()
+	log.Info("Test message")
 }
