@@ -6,9 +6,6 @@ import (
 	"github.com/jgolang/log"
 )
 
-func init() {
-}
-
 func TestLogger_Output(t *testing.T) {
-	log.Info("Test message")
+	log.Error("Test message")
 }
