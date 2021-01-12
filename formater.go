@@ -100,10 +100,11 @@ func (f Formater) jsonFormat(buf *[]byte, t time.Time, file string, line int, fu
 		*buf = append(*buf, f.additionalInfo...)
 	}
 	if f.prodFlag&(Lcaller) != 0 {
-		pk := getLastToFirstStrSlice(function, os.PathSeparator, 0)
+		pk := getLastToFirstStrSlice(function, '.', 0)
 		fl := getLastStrSlice(file, os.PathSeparator, 0)
 		*buf = append(*buf, "\",\"caller\":\""...)
 		*buf = append(*buf, pk...)
+		*buf = append(*buf, '/')
 		*buf = append(*buf, fl...)
 		*buf = append(*buf, ':')
 		itoa(buf, int64(line), 2)
@@ -181,9 +182,10 @@ func (f Formater) terminalFormat(buf *[]byte, t time.Time, file string, line int
 		*buf = append(*buf, ':')
 		itoa(buf, int64(line), 2)
 	} else if f.devFlag&(Lfile) != 0 {
-		pk := getLastToFirstStrSlice(function, os.PathSeparator, 0)
+		pk := getLastToFirstStrSlice(function, '.', 0)
 		fl := getLastStrSlice(file, os.PathSeparator, 0)
 		*buf = append(*buf, pk...)
+		*buf = append(*buf, '/')
 		*buf = append(*buf, fl...)
 		if f.devFlag&(Lline) != 0 {
 			*buf = append(*buf, ':')
