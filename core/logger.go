@@ -275,13 +275,13 @@ func (l *Logger) StackTrace(v interface{}) {
 	return
 }
 
-// SetNewFormatter configure your custom outputs development and production format
-func (l *Logger) SetNewFormatter(f Formatter) {
+// RegisterNewFormatter configure your custom outputs development and production format
+func (l *Logger) RegisterNewFormatter(f Formatter) {
 	l.formatter = f
 }
 
-// SetNewOutputter Set custom log output destination
-func (l *Logger) SetNewOutputter(o Output) {
+// RegisterNewOutput Set custom log output destination
+func (l *Logger) RegisterNewOutput(o Output) {
 	l.output = o
 }
 
