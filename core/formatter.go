@@ -2,8 +2,8 @@ package core
 
 import "time"
 
-// Formater interface for implement a logger...
-type Formater interface {
+// Formatter define custom format output to implement in a new logger
+type Formatter interface {
 	Development(buf *[]byte, t time.Time, file string, line int, function string, p Priority, s string, stack [][]byte)
 	Production(buf *[]byte, t time.Time, file string, line int, function string, p Priority, s string, stack [][]byte)
 }

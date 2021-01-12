@@ -29,8 +29,8 @@ const (
 type Logger struct {
 	mu        sync.Mutex // ensures atomic writes; protects the following fields
 	buf       []byte     // for accumulating text to write
-	out       Output     // destination for output
-	formater  Formater   // out formatter
+	output    Output     // destination for output
+	formatter Formatter  // out formatter
 	calldepth int
 	prod      bool
 }
@@ -39,8 +39,8 @@ type Logger struct {
 // destination to which log data will be written.
 // The prefix appears at the beginning of each generated log line.
 // The flag argument defines the logging properties.
-func New(f Formater, out Output, calldepth int) Logger {
-	return Logger{out: out, formater: f, calldepth: calldepth}
+func New(f Formatter, o Output, calldepth int) Logger {
+	return Logger{output: o, formatter: f, calldepth: calldepth}
 }
 
 // Output writes the output for a logging event. The string s contains
@@ -70,14 +70,14 @@ func (l *Logger) Output(calldepth int, p Priority, template string, args []inter
 		if p < 2 {
 			return nil
 		}
-		l.formater.Production(&l.buf, now, file, line, f.Name(), p, s, stack)
+		l.formatter.Production(&l.buf, now, file, line, f.Name(), p, s, stack)
 	} else {
-		l.formater.Development(&l.buf, now, file, line, f.Name(), p, s, stack)
+		l.formatter.Development(&l.buf, now, file, line, f.Name(), p, s, stack)
 	}
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
 	}
-	err := l.out.Write(l.buf)
+	err := l.output.Write(l.buf)
 	return err
 }
 
@@ -275,14 +275,14 @@ func (l *Logger) StackTrace(v interface{}) {
 	return
 }
 
-// SetNewFormat configure your custom outputs development and production format
-func (l *Logger) SetNewFormat(f Formater) {
-	l.formater = f
+// SetNewFormatter configure your custom outputs development and production format
+func (l *Logger) SetNewFormatter(f Formatter) {
+	l.formatter = f
 }
 
-// SetNewOutput Set custom log output destination
-func (l *Logger) SetNewOutput(o Output) {
-	l.out = o
+// SetNewOutputter Set custom log output destination
+func (l *Logger) SetNewOutputter(o Output) {
+	l.output = o
 }
 
 // ProductionMode set production mode logger
