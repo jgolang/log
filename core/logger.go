@@ -1,4 +1,4 @@
-package log
+package core
 
 import (
 	"fmt"
@@ -29,8 +29,8 @@ const (
 type Logger struct {
 	mu        sync.Mutex // ensures atomic writes; protects the following fields
 	buf       []byte     // for accumulating text to write
-	out       out        // destination for output
-	formater  formater
+	output    Output     // destination for output
+	formatter Formatter  // out formatter
 	calldepth int
 	prod      bool
 }
@@ -39,8 +39,8 @@ type Logger struct {
 // destination to which log data will be written.
 // The prefix appears at the beginning of each generated log line.
 // The flag argument defines the logging properties.
-func New(f Formater, out Out, calldepth int) Logger {
-	return Logger{out: out, formater: f, calldepth: calldepth}
+func New(f Formatter, o Output, calldepth int) Logger {
+	return Logger{output: o, formatter: f, calldepth: calldepth}
 }
 
 // Output writes the output for a logging event. The string s contains
@@ -70,63 +70,15 @@ func (l *Logger) Output(calldepth int, p Priority, template string, args []inter
 		if p < 2 {
 			return nil
 		}
-		l.formater.Production(&l.buf, now, file, line, f.Name(), p, s, stack)
+		l.formatter.Production(&l.buf, now, file, line, f.Name(), p, s, stack)
 	} else {
-		l.formater.Development(&l.buf, now, file, line, f.Name(), p, s, stack)
+		l.formatter.Development(&l.buf, now, file, line, f.Name(), p, s, stack)
 	}
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
 	}
-	err := l.out.Write(l.buf)
+	err := l.output.Write(l.buf)
 	return err
-}
-
-func getLastStrSlice(s string, substr byte, jump int) string {
-	var str string
-	flag := 0
-	for i := len(s) - 1; i > 0; i-- {
-		if s[i] == substr {
-			if flag < jump {
-				flag++
-				continue
-			}
-			str = s[i+1:]
-			break
-		}
-	}
-	return str
-}
-
-func getLastToFirstStrSlice(s string, substr byte, jump int) string {
-	var str string
-	flag := 0
-	for i := len(s) - 1; i > 0; i-- {
-		if s[i] == substr {
-			if flag < jump {
-				flag++
-				continue
-			}
-			str = s[:i]
-			break
-		}
-	}
-	return str
-}
-
-func getFirstStrSlice(s string, substr byte, jump int) string {
-	var str string
-	flag := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == substr {
-			if flag < jump {
-				flag++
-				continue
-			}
-			str = s[:i]
-			break
-		}
-	}
-	return str
 }
 
 // GetTypeMsg get message type
@@ -323,14 +275,14 @@ func (l *Logger) StackTrace(v interface{}) {
 	return
 }
 
-// SetNewFormat configure your custom outputs development and production format
-func (l *Logger) SetNewFormat(f formater) {
-	l.formater = f
+// RegisterNewFormatter configure your custom outputs development and production format
+func (l *Logger) RegisterNewFormatter(f Formatter) {
+	l.formatter = f
 }
 
-// SetNewOutput Set custom log output destination
-func (l *Logger) SetNewOutput(o out) {
-	l.out = o
+// RegisterNewOutput Set custom log output destination
+func (l *Logger) RegisterNewOutput(o Output) {
+	l.output = o
 }
 
 // ProductionMode set production mode logger

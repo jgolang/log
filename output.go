@@ -4,18 +4,14 @@ import (
 	"io"
 )
 
-type out interface {
-	Write(p []byte) error
-}
-
-// Out doc
-type Out struct {
+// Output doc
+type Output struct {
 	// wr is standar output
 	wr io.Writer
 }
 
 // Write doc ..
-func (o Out) Write(p []byte) error {
+func (o Output) Write(p []byte) error {
 	_, err := o.wr.Write(p)
 	return err
 }
