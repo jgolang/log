@@ -40,7 +40,7 @@ const (
 type Formatter struct {
 	devFlag        int
 	prodFlag       int
-	additionalInfo string
+	additionalInfo *string
 }
 
 // Production doc
@@ -77,7 +77,7 @@ func (f Formatter) jsonFormat(buf *[]byte, t time.Time, file string, line int, f
 	}
 	if f.prodFlag&(Linfo) != 0 {
 		*buf = append(*buf, "\",\"flags\":\""...)
-		*buf = append(*buf, f.additionalInfo...)
+		*buf = append(*buf, *f.additionalInfo...)
 	}
 	if f.prodFlag&(Lcaller) != 0 {
 		pk := getLastToFirstStrSlice(function, '.', 0)

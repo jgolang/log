@@ -55,7 +55,7 @@ func SetCalldepth(calldepth int) {
 }
 
 // OverrideConfig set a new configuration
-func OverrideConfig(devFlags, prodFlags int, additionalInfo string) {
+func OverrideConfig(devFlags, prodFlags int, additionalInfo *string) {
 	std.RegisterNewFormatter(NewFormaterConfig(devFlags, prodFlags, additionalInfo))
 }
 
@@ -65,6 +65,6 @@ func GetMode() string {
 }
 
 // NewFormaterConfig doc ...
-func NewFormaterConfig(devFlag, prodFlag int, additionalInfo string) Formatter {
+func NewFormaterConfig(devFlag, prodFlag int, additionalInfo *string) Formatter {
 	return Formatter{devFlag: devFlag, prodFlag: prodFlag, additionalInfo: additionalInfo}
 }
