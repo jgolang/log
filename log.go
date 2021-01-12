@@ -2,14 +2,16 @@ package log
 
 import (
 	"os"
+
+	"github.com/jgolang/log/core"
 )
 
-var std = New(
-	Formater{
+var std = core.New(
+	Formatter{
 		prodFlag: LstdProdFlags,
 		devFlag:  LstdDevFlags,
 	},
-	Out{
+	Output{
 		wr: os.Stderr,
 	},
 	3)
@@ -26,14 +28,14 @@ func init() {
 	}
 }
 
-// SetNewFormat configure your custom outputs development and production format for default loggin
-func SetNewFormat(f formater) {
-	std.SetNewFormat(f)
+// RegisterNewFormatter configure your custom outputs development and production format for default loggin
+func RegisterNewFormatter(f core.Formatter) {
+	std.RegisterNewFormatter(f)
 }
 
-// SetNewOutput Set custom log output destination for default loggin
-func SetNewOutput(o out) {
-	std.SetNewOutput(o)
+// RegisterNewOutput Set custom log output destination for default loggin
+func RegisterNewOutput(o core.Output) {
+	std.RegisterNewOutput(o)
 }
 
 // ProductionMode set production mode logger for default loggin
@@ -54,7 +56,7 @@ func SetCalldepth(calldepth int) {
 
 // OverrideConfig set a new configuration
 func OverrideConfig(devFlags, prodFlags int, additionalInfo string) {
-	std.SetNewFormat(NewFormaterConfig(devFlags, prodFlags, additionalInfo))
+	std.RegisterNewFormatter(NewFormaterConfig(devFlags, prodFlags, additionalInfo))
 }
 
 // GetMode doc ...
@@ -63,6 +65,6 @@ func GetMode() string {
 }
 
 // NewFormaterConfig doc ...
-func NewFormaterConfig(devFlag, prodFlag int, additionalInfo string) Formater {
-	return Formater{devFlag: devFlag, prodFlag: prodFlag, additionalInfo: additionalInfo}
+func NewFormaterConfig(devFlag, prodFlag int, additionalInfo string) Formatter {
+	return Formatter{devFlag: devFlag, prodFlag: prodFlag, additionalInfo: additionalInfo}
 }
