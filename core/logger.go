@@ -81,54 +81,6 @@ func (l *Logger) Output(calldepth int, p Priority, template string, args []inter
 	return err
 }
 
-func getLastStrSlice(s string, substr byte, jump int) string {
-	var str string
-	flag := 0
-	for i := len(s) - 1; i > 0; i-- {
-		if s[i] == substr {
-			if flag < jump {
-				flag++
-				continue
-			}
-			str = s[i+1:]
-			break
-		}
-	}
-	return str
-}
-
-func getLastToFirstStrSlice(s string, substr byte, jump int) string {
-	var str string
-	flag := 0
-	for i := len(s) - 1; i > 0; i-- {
-		if s[i] == substr {
-			if flag < jump {
-				flag++
-				continue
-			}
-			str = s[:i]
-			break
-		}
-	}
-	return str
-}
-
-func getFirstStrSlice(s string, substr byte, jump int) string {
-	var str string
-	flag := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == substr {
-			if flag < jump {
-				flag++
-				continue
-			}
-			str = s[:i]
-			break
-		}
-	}
-	return str
-}
-
 // GetTypeMsg get message type
 func GetTypeMsg(prod bool, p Priority) string {
 	if prod {
