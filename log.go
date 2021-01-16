@@ -17,7 +17,7 @@ var std = core.New(
 	3)
 
 func init() {
-	// Load enviroment mode
+	// Load environment mode
 	switch mode := os.Getenv("MODE"); mode {
 	case "PROD":
 		ProductionMode()

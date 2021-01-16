@@ -34,7 +34,7 @@
 //      log.Println("My info....")
 //  }
 //
-// Terminal utput:
+// Terminal output:
 //
 //  2020/07/05 13:32:03     INFO    /dir/file.go:10 (function) My info...
 //
