@@ -51,4 +51,4 @@
 //  PROD | DEV
 //
 // Note: Error logs are printed regardless of this setting.
-package log // import "github.com/jgolang/go"
+package log
