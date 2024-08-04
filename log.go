@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -61,4 +62,26 @@ func SetCalldepth(calldepth int) {
 //	logger.SetLevel(oldLevel)
 func SetLevel(level slog.Level) (oldLevel slog.Level) {
 	return std.SetLevel(level)
+}
+
+func validateArgs(args ...any) (string, []any) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	var msg string
+	var rest []interface{}
+	switch v := args[0].(type) {
+	case string:
+		msg = v
+		rest = args[1:]
+	case error:
+		msg = v.Error()
+		rest = args[1:]
+		rest = append(rest, "error")
+		rest = append(rest, v)
+	default:
+		msg = fmt.Sprintf("Unknown type: %T", v)
+		rest = args[1:]
+	}
+	return msg, rest
 }

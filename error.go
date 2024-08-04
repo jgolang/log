@@ -5,46 +5,40 @@ import (
 )
 
 // Error logs an error-level message using the global logger.
-// msg: The message to log.
-// args: Additional arguments to format the message.
-func Error(msg string, args ...any) {
-	std.Error(msg, args...)
+func Error(args ...any) {
+	msg, attrs := validateArgs(args...)
+	std.Error(msg, attrs...)
 }
 
 // ErrorC logs an error-level message with context using the global logger.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
-func ErrorC(ctx context.Context, msg string, args ...interface{}) {
-	std.ErrorContext(ctx, msg, args...)
+// ctx: The context for the log entry..
+func ErrorC(ctx context.Context, args ...interface{}) {
+	msg, attrs := validateArgs(args...)
+	std.ErrorContext(ctx, msg, attrs...)
 }
 
 // Panic logs a panic-level message using the global logger and then panics.
-// msg: The message to log.
-// args: Additional arguments to format the message.
-func Panic(msg string, args ...any) {
-	std.Panic(msg, args...)
+func Panic(args ...any) {
+	msg, attrs := validateArgs(args...)
+	std.Panic(msg, attrs...)
 }
 
 // PanicC logs a panic-level message with context using the global logger and then panics.
 // ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
-func PanicC(ctx context.Context, msg string, args ...any) {
-	std.PanicContext(ctx, msg, args...)
+func PanicC(ctx context.Context, args ...any) {
+	msg, attrs := validateArgs(args...)
+	std.PanicContext(ctx, msg, attrs...)
 }
 
 // Fatal logs a fatal-level message using the global logger and then calls os.Exit(1).
-// msg: The message to log.
-// args: Additional arguments to format the message.
-func Fatal(msg string, args ...any) {
-	std.Fatal(msg, args...)
+func Fatal(args ...any) {
+	msg, attrs := validateArgs(args...)
+	std.Fatal(msg, attrs...)
 }
 
 // FatalC logs a fatal-level message with context using the global logger and then calls os.Exit(1).
 // ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
-func FatalC(ctx context.Context, msg string, args ...any) {
-	std.FatalContext(ctx, msg, args...)
+func FatalC(ctx context.Context, args ...any) {
+	msg, attrs := validateArgs(args...)
+	std.FatalContext(ctx, msg, attrs...)
 }

@@ -27,7 +27,7 @@ func TestDebug(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			Debug(tt.args.msg, tt.args.args...)
+			Debug(tt.args.args...)
 		})
 	}
 }
@@ -86,7 +86,8 @@ func TestDebugTesting(t *testing.T) {
 	Info("hello", "error", err)
 	err2 := c()
 	Info("hello", "error", err2)
-
+	Error("hello", "error", err2)
+	Error(err)
 }
 
 func a() error {
