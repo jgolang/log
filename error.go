@@ -1,45 +1,50 @@
 package log
 
-// Error uses fmt.Sprint to construct and log a message.
-// Error logs a message at ErrorLevel.
-func Error(args ...interface{}) {
-	std.Error(args...)
-	return
+import (
+	"context"
+)
+
+// Error logs an error-level message using the global logger.
+// msg: The message to log.
+// args: Additional arguments to format the message.
+func Error(msg string, args ...any) {
+	std.Error(msg, args...)
 }
 
-// Errorf uses fmt.Sprintf to log a templated message
-// Errorf logs a message at ErrorLevel with format.
-func Errorf(template string, args ...interface{}) {
-	std.Errorf(template, args...)
-	return
+// ErrorC logs an error-level message with context using the global logger.
+// ctx: The context for the log entry.
+// msg: The message to log.
+// args: Additional arguments to format the message.
+func ErrorC(ctx context.Context, msg string, args ...interface{}) {
+	std.ErrorContext(ctx, msg, args...)
 }
 
-// Panic uses fmt.Sprint to construct and log a message, then panics.
-// Panic logs a message at PanicLevel. The logger then panics,
-// even if logging at PanicLevel is disabled.
-func Panic(args ...interface{}) {
-	std.Panic(args...)
-	return
+// Panic logs a panic-level message using the global logger and then panics.
+// msg: The message to log.
+// args: Additional arguments to format the message.
+func Panic(msg string, args ...any) {
+	std.Panic(msg, args...)
 }
 
-// Panicf uses fmt.Sprintf to log a templated message, then panics.
-// Panicf logs a message at PanicLevel whit format. The logger then panics,
-// even if logging at PanicLevel is disabled.
-func Panicf(template string, args ...interface{}) {
-	std.Panicf(template, args...)
-	return
+// PanicC logs a panic-level message with context using the global logger and then panics.
+// ctx: The context for the log entry.
+// msg: The message to log.
+// args: Additional arguments to format the message.
+func PanicC(ctx context.Context, msg string, args ...any) {
+	std.PanicContext(ctx, msg, args...)
 }
 
-// Fatal uses fmt.Sprint to construct and log a message, then calls os.Exit.
-// Fatal logs a message at FatalLevel.
-func Fatal(args ...interface{}) {
-	std.Fatal(args...)
-	return
+// Fatal logs a fatal-level message using the global logger and then calls os.Exit(1).
+// msg: The message to log.
+// args: Additional arguments to format the message.
+func Fatal(msg string, args ...any) {
+	std.Fatal(msg, args...)
 }
 
-// Fatalf uses fmt.Sprintf to log a templated message, then calls os.Exit.
-// Fatalf logs a message at FatalLevel with format.
-func Fatalf(template string, args ...interface{}) {
-	std.Fatalf(template, args...)
-	return
+// FatalC logs a fatal-level message with context using the global logger and then calls os.Exit(1).
+// ctx: The context for the log entry.
+// msg: The message to log.
+// args: Additional arguments to format the message.
+func FatalC(ctx context.Context, msg string, args ...any) {
+	std.FatalContext(ctx, msg, args...)
 }
