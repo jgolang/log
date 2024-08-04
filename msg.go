@@ -2,18 +2,22 @@ package log
 
 import "context"
 
-func Print(msg string, args ...interface{}) {
-	std.Print(msg, args...)
+func Print(args ...interface{}) {
+	msg, attrs := validateArgs(args...)
+	std.Print(msg, attrs...)
 }
 
-func Printf(ctx context.Context, msg string, args ...interface{}) {
-	std.PrintContext(ctx, msg, args...)
+func Printf(ctx context.Context, args ...interface{}) {
+	msg, attrs := validateArgs(args...)
+	std.PrintContext(ctx, msg, attrs...)
 }
 
-func Info(msg string, args ...interface{}) {
-	std.Info(msg, args...)
+func Info(args ...interface{}) {
+	msg, attrs := validateArgs(args...)
+	std.Info(msg, attrs...)
 }
 
-func InfoC(ctx context.Context, msg string, args ...interface{}) {
-	std.InfoContext(ctx, msg, args...)
+func InfoC(ctx context.Context, args ...interface{}) {
+	msg, attrs := validateArgs(args...)
+	std.InfoContext(ctx, msg, attrs...)
 }
