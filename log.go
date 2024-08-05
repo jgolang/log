@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/jgolang/errors"
 	"github.com/jgolang/log/logger"
 )
 
@@ -18,8 +19,8 @@ func init() {
 
 func NewJSONHandler() {
 	opts := &slog.HandlerOptions{
-		Level:       slog.LevelDebug,
-		ReplaceAttr: logger.ReplaceAttr,
+		Level: slog.LevelDebug,
+		// ReplaceAttr: logger.ReplaceAttr,
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, opts))
 	slog.SetDefault(logger)
@@ -27,8 +28,8 @@ func NewJSONHandler() {
 
 func NewTextHandler() {
 	opts := &slog.HandlerOptions{
-		Level:       slog.LevelDebug,
-		ReplaceAttr: logger.ReplaceAttr,
+		Level: slog.LevelDebug,
+		// ReplaceAttr: logger.ReplaceAttr,
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, opts))
 	slog.SetDefault(logger)
@@ -78,7 +79,13 @@ func validateArgs(args ...any) (string, []any) {
 		msg = v.Error()
 		rest = args[1:]
 		rest = append(rest, "error")
-		rest = append(rest, v)
+		msg := slog.String("msg", v.Error())
+		err, ok := v.(*errors.Error)
+		if ok {
+			rest = append(rest, slog.GroupValue(msg, err.StackTrace()))
+		} else {
+			rest = append(rest, v)
+		}
 	default:
 		msg = fmt.Sprintf("Unknown type: %T", v)
 		rest = args[1:]
