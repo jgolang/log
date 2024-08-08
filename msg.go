@@ -7,7 +7,7 @@ func Print(args ...interface{}) {
 	std.Print(msg, attrs...)
 }
 
-func Printf(ctx context.Context, args ...interface{}) {
+func PrintC(ctx context.Context, args ...interface{}) {
 	msg, attrs := validateArgs(args...)
 	std.PrintContext(ctx, msg, attrs...)
 }
