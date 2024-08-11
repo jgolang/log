@@ -78,13 +78,12 @@ func validateArgs(args ...any) (string, []any) {
 	case error:
 		msg = v.Error()
 		rest = args[1:]
-		rest = append(rest, "error")
-		msg := slog.String("msg", v.Error())
 		err, ok := v.(*errors.Error)
 		if ok {
-			rest = append(rest, slog.GroupValue(msg, err.StackTrace()))
+			errGroup := slog.Group("error", "msg", v.Error(), "origin", err.StackTrace())
+			rest = append(rest, errGroup)
 		} else {
-			rest = append(rest, v)
+			rest = append(rest, "error", v)
 		}
 	default:
 		msg = fmt.Sprintf("Unknown type: %T", v)
