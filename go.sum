@@ -4,8 +4,8 @@ github.com/go-errors/errors v1.5.1 h1:ZwEMSLRCapFLflTpT7NKaAc7ukJ8ZPEjzlxt8rPN8b
 github.com/go-errors/errors v1.5.1/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/jgolang/errors v0.1.5 h1:HCOQkT73JVnMciZkj5yJi3HoG/Gq4qjR5kbagfV7JiU=
-github.com/jgolang/errors v0.1.5/go.mod h1:HMFh/3IIKILAnWj00X771oGK6Nk3C7Sf0yZYimo9HJg=
+github.com/jgolang/errors v0.1.9 h1:/IuuwC3zM3g++LXTH5fw6voGfEFoaQa9iSsPCMGalAU=
+github.com/jgolang/errors v0.1.9/go.mod h1:HMFh/3IIKILAnWj00X771oGK6Nk3C7Sf0yZYimo9HJg=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
