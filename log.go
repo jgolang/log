@@ -88,7 +88,12 @@ func validateArgs(args ...any) (string, []any) {
 		rest = args[1:]
 		err, ok := v.(*errors.Error)
 		if ok {
-			errGroup := slog.Group("error", "msg", v.Error(), "origin", err.StackTrace())
+			errGroup := slog.Group("error",
+				"code", err.Code.Str(),
+				"msg", err.Code.Msg(),
+				"debug", err.Wrapper.Error(),
+				"origin", err.StackTrace(),
+			)
 			rest = append(rest, errGroup)
 		} else {
 			rest = append(rest, "error", v)
