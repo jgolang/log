@@ -13,13 +13,15 @@ var pc = make([]uintptr, 10)
 
 var std = logger.New(3, pc)
 
+var level = slog.LevelDebug
+
 func init() {
 	NewJSONHandler()
 }
 
 func NewJSONHandler() {
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: level,
 		// ReplaceAttr: logger.ReplaceAttr,
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, opts))
@@ -28,7 +30,7 @@ func NewJSONHandler() {
 
 func NewTextHandler() {
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: level,
 		// ReplaceAttr: logger.ReplaceAttr,
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, opts))
@@ -61,8 +63,14 @@ func SetCalldepth(calldepth int) {
 //	// The log level is now set to INFO
 //	// You can restore the old level if needed
 //	logger.SetLevel(oldLevel)
-func SetLevel(level slog.Level) (oldLevel slog.Level) {
-	return std.SetLevel(level)
+func SetLevel(newLevel slog.Level) (oldLevel slog.Level) {
+	level = newLevel
+	return std.SetLevel(newLevel)
+}
+
+// Level return current log level
+func Level() slog.Level {
+	return level
 }
 
 func validateArgs(args ...any) (string, []any) {
