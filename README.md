@@ -1,8 +1,16 @@
 # Log v1
 
-Structured logging built on top of `log/slog`.
+Structured logging built on top of `log/slog`, with package-level helpers you
+can use without passing a logger through every function.
 
 ## Overview
+
+Configure the logger once at startup, then log from anywhere:
+
+```go
+log.Info("service started", "port", 8080)
+log.Error(err, "request_id", id)
+```
 
 This package wraps `slog` with:
 
