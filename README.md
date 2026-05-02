@@ -38,9 +38,38 @@ func main(){
 ```go
 log.SetLevel(slog.LevelWarn)
 log.NewTextHandler()
+log.SetSource(true)
+log.SetDebugStackTrace(false)
 ```
 
 The package no longer depends on a `MODE` environment variable.
+Debug stack traces are now opt-in.
+
+## Instance API
+
+```go
+logger := log.New(
+    log.WithLevel(slog.LevelInfo),
+    log.WithTextHandler(os.Stdout),
+    log.WithSource(true),
+    log.WithDebugStackTrace(false),
+)
+
+logger.Info("service started")
+```
+
+## OpenTelemetry
+
+The `otel` handler now disables baggage logging by default.
+If you need baggage in logs, enable it explicitly and prefer an allow-list:
+
+```go
+handler := otel.New(
+    slog.NewJSONHandler(os.Stdout, nil),
+    otel.WithNoBaggage(false),
+    otel.WithBaggageAllowList("request_id", "tenant"),
+)
+```
 
 <hr>
 

@@ -41,9 +41,14 @@ type OtelHandler struct {
 	NoBaggage bool
 	// NoTraceEvents determines whether to record an event for every log on the active trace.
 	NoTraceEvents bool
+	// BaggageFilter can allow, drop, or redact baggage members before they are logged.
+	BaggageFilter BaggageFilter
 }
 
 type OtelHandlerOpt func(handler *OtelHandler)
+
+// BaggageFilter returns the value to log and whether the member should be included.
+type BaggageFilter func(key, value string) (string, bool)
 
 // HandlerFn defines the handler used by slog.Handler as return value.
 type HandlerFn func(slog.Handler) slog.Handler
@@ -62,10 +67,44 @@ func WithNoTraceEvents(noTraceEvents bool) OtelHandlerOpt {
 	}
 }
 
+// WithBaggageFilter configures a baggage filter for selective logging/redaction.
+func WithBaggageFilter(filter BaggageFilter) OtelHandlerOpt {
+	return func(handler *OtelHandler) {
+		handler.BaggageFilter = filter
+	}
+}
+
+// WithBaggageAllowList only logs baggage members whose keys are explicitly listed.
+func WithBaggageAllowList(keys ...string) OtelHandlerOpt {
+	allowed := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		allowed[key] = struct{}{}
+	}
+
+	return WithBaggageFilter(func(key, value string) (string, bool) {
+		_, ok := allowed[key]
+		return value, ok
+	})
+}
+
+// WithBaggageDenyList drops baggage members whose keys are explicitly listed.
+func WithBaggageDenyList(keys ...string) OtelHandlerOpt {
+	denied := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		denied[key] = struct{}{}
+	}
+
+	return WithBaggageFilter(func(key, value string) (string, bool) {
+		_, deniedKey := denied[key]
+		return value, !deniedKey
+	})
+}
+
 // New creates a new OtelHandler to use with log/slog
 func New(next slog.Handler, opts ...OtelHandlerOpt) *OtelHandler {
 	ret := &OtelHandler{
-		Next: next,
+		Next:      next,
+		NoBaggage: true,
 	}
 	for _, opt := range opts {
 		opt(ret)
@@ -89,7 +128,16 @@ func (h OtelHandler) Handle(ctx context.Context, record slog.Record) error {
 		// Adding context baggage members to log record.
 		b := baggage.FromContext(ctx)
 		for _, m := range b.Members() {
-			record.AddAttrs(slog.String(m.Key(), m.Value()))
+			key := m.Key()
+			value := m.Value()
+			if h.BaggageFilter != nil {
+				filteredValue, ok := h.BaggageFilter(key, value)
+				if !ok {
+					continue
+				}
+				value = filteredValue
+			}
+			record.AddAttrs(slog.String(key, value))
 		}
 	}
 
@@ -145,6 +193,7 @@ func (h OtelHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		Next:          h.Next.WithAttrs(attrs),
 		NoBaggage:     h.NoBaggage,
 		NoTraceEvents: h.NoTraceEvents,
+		BaggageFilter: h.BaggageFilter,
 	}
 }
 
@@ -154,6 +203,7 @@ func (h OtelHandler) WithGroup(name string) slog.Handler {
 		Next:          h.Next.WithGroup(name),
 		NoBaggage:     h.NoBaggage,
 		NoTraceEvents: h.NoTraceEvents,
+		BaggageFilter: h.BaggageFilter,
 	}
 }
 

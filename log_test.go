@@ -41,3 +41,42 @@ func TestInfoUsesConfiguredHandler(t *testing.T) {
 		t.Fatalf("expected message in output, got %q", buf.String())
 	}
 }
+
+func TestNewSupportsDisablingSource(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(
+		WithJSONHandler(&buf),
+		WithSource(false),
+	)
+
+	instance.Info("hello")
+
+	if strings.Contains(buf.String(), "\"source\"") {
+		t.Fatalf("expected source metadata to be disabled, got %q", buf.String())
+	}
+}
+
+func TestDebugStackTraceIsOptIn(t *testing.T) {
+	var withoutStack bytes.Buffer
+	instance := New(
+		WithJSONHandler(&withoutStack),
+		WithLevel(slog.LevelDebug),
+	)
+	instance.Debug("hello")
+
+	if strings.Contains(withoutStack.String(), "stack_trace") {
+		t.Fatalf("expected debug stack trace to be disabled by default, got %q", withoutStack.String())
+	}
+
+	var withStack bytes.Buffer
+	instanceWithStack := New(
+		WithJSONHandler(&withStack),
+		WithLevel(slog.LevelDebug),
+		WithDebugStackTrace(true),
+	)
+	instanceWithStack.Debug("hello")
+
+	if !strings.Contains(withStack.String(), "stack_trace") {
+		t.Fatalf("expected debug stack trace when enabled, got %q", withStack.String())
+	}
+}

@@ -38,6 +38,20 @@
 //
 //  log.SetLevel(slog.LevelWarn)
 //  log.NewTextHandler()
+//  log.SetSource(true)
+//  log.SetDebugStackTrace(false)
 //
-// The package does not depend on environment variables.
+// The package does not depend on environment variables, and debug stack
+// traces are opt-in.
+//
+// You can also build isolated logger instances:
+//
+//  logger := log.New(
+//      log.WithLevel(slog.LevelInfo),
+//      log.WithTextHandler(os.Stdout),
+//      log.WithSource(true),
+//      log.WithDebugStackTrace(false),
+//  )
+//
+//  logger.Info("service started")
 package log
