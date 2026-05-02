@@ -23,6 +23,4 @@ func ExampleInfo_info() {
 	// Use this function to see the trace of execution of the sentence.
 	// This function is useful for tracking where errors are generated.
 	log.Info("Hello world!")
-	// Output:
-	// {"level":"info","ts":"1599292300.656843","flags":"","caller":"hello.com/package/file.go:10","msg":"Hello world!"}
 }

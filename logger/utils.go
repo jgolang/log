@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -27,16 +28,17 @@ func itoa(buf *[]byte, i int64, wid int) {
 // If the Record was created without the necessary information,
 // or if the location is unavailable, it returns a non-nil *Source
 // with zero fields.
-func source(calldepth int, pc []uintptr) slog.Attr {
+func source(calldepth int) slog.Attr {
+	pc := make([]uintptr, 1)
 	num := runtime.Callers(calldepth, pc)
 	fs := runtime.CallersFrames(pc[0:num])
 	f, _ := fs.Next()
 	var as []any
 	if f.Function != "" {
-		as = append(as, slog.String("func", f.Function))
+		as = append(as, slog.String("func", getFuncName(f.Function)))
 	}
 	if f.File != "" {
-		as = append(as, slog.String("file", f.File))
+		as = append(as, slog.String("file", filepath.Base(f.File)))
 	}
 	if f.Line != 0 {
 		as = append(as, slog.Int("line", f.Line))
@@ -44,21 +46,22 @@ func source(calldepth int, pc []uintptr) slog.Attr {
 	return slog.Group("source", as...)
 }
 
-func sourceWithStackTrace(calldepth int, pc []uintptr) slog.Attr {
+func sourceWithStackTrace(calldepth int) slog.Attr {
+	pc := make([]uintptr, 10)
 	num := runtime.Callers(calldepth, pc)
 	fs := runtime.CallersFrames(pc[0:num])
 	f, _ := fs.Next()
 	var as []any
 	if f.Function != "" {
-		as = append(as, slog.String("func", f.Function))
+		as = append(as, slog.String("func", getFuncName(f.Function)))
 	}
 	if f.File != "" {
-		as = append(as, slog.String("file", f.File))
+		as = append(as, slog.String("file", filepath.Base(f.File)))
 	}
 	if f.Line != 0 {
 		as = append(as, slog.Int("line", f.Line))
 	}
-	stack := getStackTrace(calldepth+1, pc)
+	stack := getStackTrace(calldepth + 1)
 	as = append(as, stack)
 	return slog.Group("source", as...)
 }
@@ -68,7 +71,8 @@ func getFuncName(function string) string {
 	return function[p+1:]
 }
 
-func getStackTrace(calldepth int, pc []uintptr) slog.Attr {
+func getStackTrace(calldepth int) slog.Attr {
+	pc := make([]uintptr, 10)
 	num := runtime.Callers(calldepth, pc)
 	frames := runtime.CallersFrames(pc[0:num])
 	var as []any
@@ -78,11 +82,10 @@ func getStackTrace(calldepth int, pc []uintptr) slog.Attr {
 		if found {
 			var newbuf []byte
 			newbuf = newbuf[:0]
-			newbuf = append(newbuf, frame.File...)
+			newbuf = append(newbuf, filepath.Base(frame.File)...)
 			newbuf = append(newbuf, ':')
 			itoa(&newbuf, int64(frame.Line), 2)
-			p := strings.LastIndex(frame.Function, ".")
-			function := frame.Function[p+1:]
+			function := getFuncName(frame.Function)
 			newbuf = append(newbuf, ' ')
 			newbuf = append(newbuf, '(')
 			newbuf = append(newbuf, function...)

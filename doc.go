@@ -5,22 +5,16 @@
 // Everyone is permitted to copy and distribute verbatim copies
 // of this license document, but changing it is not allowed.
 
-// Package log provides simple, fast, structured and level registration in Go.
+// Package log provides structured logging helpers built on top of log/slog.
 //
-// This package offers several functions that allow you to trace
-// controlled log errors in the files and functions where they occur,
-// as well as useful programmer log comments in your code. This package
-// will help you identify and segment the different types of errors log
-// or unique circumstances during the execution of your program using
-// criteria according to the level of impact on the business rules of
-// its development. The package prints the useful information for the
-// programmer in a human readable format.
+// The package adds source metadata to every record, stack traces to debug
+// records, and OpenTelemetry integration through the otel subpackage.
 //
 // Installation
 //
 // Run command in terminal:
 //
-//  go get -u https://github.com/jgolang/log
+//  go get github.com/jgolang/log
 //
 // Quick Start
 //
@@ -31,24 +25,19 @@
 //  import "github.com/jgolang/log"
 //
 //  func main(){
-//      log.Println("My info....")
+//      log.Info("My info....")
 //  }
 //
-// Terminal output:
+// Output:
 //
-//  2020/07/05 13:32:03     INFO    /dir/file.go:10 (function) My info...
+//  {"time":"2026-05-02T10:00:00Z","level":"INFO","msg":"My info....","source":{"func":"main","file":"main.go","line":6}}
 //
-// Configuration Modes
+// Configuration
 //
-// You can configure the package depending on your needs to display certain
-// types of log by defining an environment variable on the system that runs
-// your program.
+// You can configure the current level and handler programmatically:
 //
-//  [user@ /home]# export MODE="DEV"
+//  log.SetLevel(slog.LevelWarn)
+//  log.NewTextHandler()
 //
-// Allowed modes
-//
-//  PROD | DEV
-//
-// Note: Error logs are printed regardless of this setting.
+// The package does not depend on environment variables.
 package log

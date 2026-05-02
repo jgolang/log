@@ -4,9 +4,10 @@ package logger
 
 import (
 	"context"
-	"os"
-
+	"io"
 	"log/slog"
+	"os"
+	"sync"
 )
 
 // Priority represents the level of importance for log messages. Higher values indicate greater importance.
@@ -14,192 +15,176 @@ type Priority int8
 
 // Logger manages logging operations with various log levels and modes.
 type Logger struct {
-	calldepth int       // Number of stack frames to ascend when generating log entries.
-	pc        []uintptr // Stack trace information used for logging.
-	prod      bool      // Indicates whether the logger is in production mode.
+	calldepth int // Number of stack frames to ascend when generating log entries.
+	prod      bool
+	level     *slog.LevelVar
+	mu        sync.RWMutex
+	logger    *slog.Logger
 }
 
 // New creates and initializes a new Logger instance.
 // calldepth: Number of stack frames to ascend for log entries.
-// pc: A slice of uintptr used to store stack trace information.
-func New(calldepth int, pc []uintptr) *Logger {
-	return &Logger{
-		calldepth: calldepth,
-		pc:        pc,
+// pc: Deprecated and ignored. Kept for backward compatibility.
+func New(calldepth int, _ []uintptr, levels ...*slog.LevelVar) *Logger {
+	level := new(slog.LevelVar)
+	level.Set(slog.LevelDebug)
+	if len(levels) > 0 && levels[0] != nil {
+		level = levels[0]
 	}
+
+	l := &Logger{
+		calldepth: calldepth,
+		level:     level,
+	}
+	l.SetJSONHandler(os.Stderr)
+	return l
+}
+
+func (l *Logger) backend() *slog.Logger {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.logger
+}
+
+func (l *Logger) setBackend(next *slog.Logger) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logger = next
+}
+
+// SetJSONHandler configures the logger to emit JSON logs to the provided writer.
+func (l *Logger) SetJSONHandler(w io.Writer) {
+	opts := &slog.HandlerOptions{
+		Level:       l.level,
+		ReplaceAttr: ReplaceAttr,
+	}
+	l.setBackend(slog.New(slog.NewJSONHandler(w, opts)))
+}
+
+// SetTextHandler configures the logger to emit text logs to the provided writer.
+func (l *Logger) SetTextHandler(w io.Writer) {
+	opts := &slog.HandlerOptions{
+		Level:       l.level,
+		ReplaceAttr: ReplaceAttr,
+	}
+	l.setBackend(slog.New(slog.NewTextHandler(w, opts)))
 }
 
 // Debug logs a debug-level message with optional arguments.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Debug(msg string, args ...any) {
-	source := sourceWithStackTrace(l.calldepth+1, l.pc)
+	source := sourceWithStackTrace(l.calldepth + 1)
 	args = append(args, source)
-	slog.Debug(msg, args...)
+	l.backend().Debug(msg, args...)
 }
 
 // DebugContext logs a debug-level message with optional arguments and context.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) DebugContext(ctx context.Context, msg string, args ...interface{}) {
-	source := sourceWithStackTrace(l.calldepth+1, l.pc)
+	source := sourceWithStackTrace(l.calldepth + 1)
 	args = append(args, source)
-	slog.DebugContext(ctx, msg, args...)
+	l.backend().DebugContext(ctx, msg, args...)
 }
 
 // Warn logs a warning-level message with optional arguments.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Warn(msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.Warn(msg, args...)
+	l.backend().Warn(msg, args...)
 }
 
 // WarnContext logs a warning-level message with optional arguments and context.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) WarnContext(ctx context.Context, msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.WarnContext(ctx, msg, args...)
+	l.backend().WarnContext(ctx, msg, args...)
 }
 
 // Error logs an error-level message with optional arguments.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Error(msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.Error(msg, args...)
+	l.backend().Error(msg, args...)
 }
 
 // ErrorContext logs an error-level message with optional arguments and context.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.ErrorContext(ctx, msg, args...)
+	l.backend().ErrorContext(ctx, msg, args...)
 }
 
 // Panic logs a panic-level message, then panics with the message.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Panic(msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	ctx := context.Background()
-	slog.Log(ctx, LevelPanic, msg, args...)
+	l.backend().Log(context.Background(), LevelPanic, msg, args...)
 	panic(msg)
 }
 
-// PanicC logs a panic-level message with context, then panics with the context.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
+// PanicContext logs a panic-level message with context, then panics with the message.
 func (l *Logger) PanicContext(ctx context.Context, msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.Log(ctx, LevelPanic, msg, args...)
-	panic(ctx)
+	l.backend().Log(ctx, LevelPanic, msg, args...)
+	panic(msg)
 }
 
 // Fatal logs a fatal-level message, then exits the application.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Fatal(msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	ctx := context.Background()
-	slog.Log(ctx, LevelFatal, msg, args...)
+	l.backend().Log(context.Background(), LevelFatal, msg, args...)
 	os.Exit(1)
 }
 
-// FatalC logs a fatal-level message with context, then exits the application.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
+// FatalContext logs a fatal-level message with context, then exits the application.
 func (l *Logger) FatalContext(ctx context.Context, msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.Log(ctx, LevelFatal, msg, args...)
+	l.backend().Log(ctx, LevelFatal, msg, args...)
 	os.Exit(1)
 }
 
 // Print logs a trace-level message with optional arguments.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Print(msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	ctx := context.Background()
-	slog.Log(ctx, LevelTrace, msg, args...)
+	l.backend().Log(context.Background(), LevelTrace, msg, args...)
 }
 
-// PrintC logs a trace-level message with context and optional arguments.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
+// PrintContext logs a trace-level message with context and optional arguments.
 func (l *Logger) PrintContext(ctx context.Context, msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.Log(ctx, LevelTrace, msg, args...)
+	l.backend().Log(ctx, LevelTrace, msg, args...)
 }
 
 // Info logs an info-level message with optional arguments.
-// msg: The message to log.
-// args: Additional arguments to format the message.
 func (l *Logger) Info(msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.Info(msg, args...)
+	l.backend().Info(msg, args...)
 }
 
-// InfoC logs an info-level message with context and optional arguments.
-// ctx: The context for the log entry.
-// msg: The message to log.
-// args: Additional arguments to format the message.
+// InfoContext logs an info-level message with context and optional arguments.
 func (l *Logger) InfoContext(ctx context.Context, msg string, args ...any) {
-	source := source(l.calldepth+1, l.pc)
+	source := source(l.calldepth + 1)
 	args = append(args, source)
-	slog.InfoContext(ctx, msg, args...)
+	l.backend().InfoContext(ctx, msg, args...)
 }
 
 // StackTrace provides a stack trace of up to 10 layers from where the error or incident was generated.
 func (l *Logger) StackTrace() slog.Attr {
-	return sourceWithStackTrace(l.calldepth+1, l.pc)
+	return sourceWithStackTrace(l.calldepth + 1)
 }
 
 // SetCalldepth configures the number of stack frames to ascend for logging.
-// calldepth: The number of stack frames to ascend.
 func (l *Logger) SetCalldepth(calldepth int) {
 	l.calldepth = calldepth
 }
 
-// SetLevel sets the logging level for the Logger instance.
-// This method updates the log level to the specified level and returns the previous log level.
-//
-// Parameters:
-//
-//	level (slog.Level) - The new log level to be set. This determines the severity of the logs
-//	                     that will be captured. Common log levels include DEBUG, INFO, WARN, and ERROR.
-//
-// Returns:
-//
-//	oldLevel (slog.Level) - The previous log level before it was updated. This can be used to restore
-//	                        the previous log level if needed.
-//
-// Example usage:
-//
-//	logger := &Logger{}
-//	oldLevel := logger.SetLevel(slog.INFO)
-//	// The log level is now set to INFO
-//	// You can restore the old level if needed
-//	logger.SetLevel(oldLevel)
+// SetLevel sets the logging level for the Logger instance and returns the previous level.
 func (l *Logger) SetLevel(level slog.Level) (oldLevel slog.Level) {
-	return slog.SetLogLoggerLevel(level)
+	oldLevel = l.level.Level()
+	l.level.Set(level)
+	return oldLevel
 }
