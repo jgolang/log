@@ -76,6 +76,18 @@ sanitized. Baggage can contain tenant identifiers, tokens, or other sensitive
 values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
 `WithBaggageFilter` to keep log output intentional.
 
+## Verification
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+go test -bench=. -run=^$ ./...
+```
+
+Use the benchmarks to compare source metadata, disabled levels, and debug stack
+traces before changing logger internals.
+
 <hr>
 
 Released under the [GPL-3.0](LICENSE).
