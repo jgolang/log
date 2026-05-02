@@ -1,14 +1,19 @@
 # Log v1
 
-Simple, fast, structured and level registration in Go.
+Structured logging built on top of `log/slog`.
 
 ## Overview
 
-This package offers several functions that allow you to trace controlled log errors in the files and functions where they occur, as well as useful programmer log comments in your code. This package will help you identify and segment the different types of errors log or unique circumstances during the execution of your program using criteria according to the level of impact on the business rules of its development. The package prints the useful information for the programmer in a human readable format.
+This package wraps `slog` with:
+
+- package-level helpers for common log levels
+- source metadata on each record
+- stack traces on debug logs
+- optional OpenTelemetry correlation via `otel`
 
 ## Installation
 
-`go get -u https://github.com/jgolang/log`
+`go get github.com/jgolang/log`
 
 ## Quick Start
 
@@ -18,34 +23,71 @@ package main
 import "github.com/jgolang/log"
 
 func main(){
-    log.Println("My info....")
+    log.Info("My info....")
 }
 ```
 
-### Terminal output:
+### Output:
 
 ```terminal
-2020/07/05 13:32:03     INFO    /dir/file.go:10 (function) My info...
+{"time":"2026-05-02T10:00:00Z","level":"INFO","msg":"My info....","source":{"func":"main","file":"main.go","line":6}}
 ```
 
-## Mode
+## Configuration
 
-You can configure the package depending on your needs to display certain types of log by defining an environment variable on the system that runs your program.
-
+```go
+log.SetLevel(slog.LevelWarn)
+log.NewTextHandler()
+log.SetSource(true)
+log.SetDebugStackTrace(false)
 ```
-[user@ /home]# export MODE="DEV"
+
+The package no longer depends on a `MODE` environment variable.
+Debug stack traces are now opt-in.
+
+## Instance API
+
+```go
+logger := log.New(
+    log.WithLevel(slog.LevelInfo),
+    log.WithTextHandler(os.Stdout),
+    log.WithSource(true),
+    log.WithDebugStackTrace(false),
+)
+
+logger.Info("service started")
 ```
 
-### Allowed modes 
+## OpenTelemetry
 
-| Mode | Description |
-| :------ | :--: | 
-| PROD | Only prints error log | 
-| DEV | Print all | 
+The `otel` handler now disables baggage logging by default.
+If you need baggage in logs, enable it explicitly and prefer an allow-list:
 
-Note: Error logs are printed regardless of this setting.
+```go
+handler := otel.New(
+    slog.NewJSONHandler(os.Stdout, nil),
+    otel.WithNoBaggage(false),
+    otel.WithBaggageAllowList("request_id", "tenant"),
+)
+```
+
+Avoid enabling all baggage in production unless the upstream context is already
+sanitized. Baggage can contain tenant identifiers, tokens, or other sensitive
+values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
+`WithBaggageFilter` to keep log output intentional.
+
+## Verification
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+go test -bench=. -run=^$ ./...
+```
+
+Use the benchmarks to compare source metadata, disabled levels, and debug stack
+traces before changing logger internals.
 
 <hr>
 
-Released under the [GPL-3.0](LICENSE.txt).
-
+Released under the [GPL-3.0](LICENSE).

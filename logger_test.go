@@ -8,5 +8,4 @@ import (
 
 func TestLogger_Output(t *testing.T) {
 	log.Error("Test message")
-	log.Fatal("Test message")
 }

@@ -9,32 +9,19 @@ import (
 	"github.com/jgolang/log/logger"
 )
 
-var pc = make([]uintptr, 10)
+var level = new(slog.LevelVar)
 
-var std = logger.New(3, pc)
-
-var level = slog.LevelDebug
-
-func init() {
-	NewJSONHandler()
-}
+var std = func() *logger.Logger {
+	level.Set(slog.LevelDebug)
+	return logger.New(3, nil, level)
+}()
 
 func NewJSONHandler() {
-	opts := &slog.HandlerOptions{
-		Level: level,
-		// ReplaceAttr: logger.ReplaceAttr,
-	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, opts))
-	slog.SetDefault(logger)
+	std.SetJSONHandler(os.Stderr)
 }
 
 func NewTextHandler() {
-	opts := &slog.HandlerOptions{
-		Level: level,
-		// ReplaceAttr: logger.ReplaceAttr,
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, opts))
-	slog.SetDefault(logger)
+	std.SetTextHandler(os.Stderr)
 }
 
 // SetCalldepth configure the number of stack frames
@@ -64,13 +51,12 @@ func SetCalldepth(calldepth int) {
 //	// You can restore the old level if needed
 //	logger.SetLevel(oldLevel)
 func SetLevel(newLevel slog.Level) (oldLevel slog.Level) {
-	level = newLevel
 	return std.SetLevel(newLevel)
 }
 
 // Level return current log level
 func Level() slog.Level {
-	return level
+	return level.Level()
 }
 
 func validateArgs(args ...any) (string, []any) {
@@ -78,7 +64,7 @@ func validateArgs(args ...any) (string, []any) {
 		return "", nil
 	}
 	var msg string
-	var rest []interface{}
+	var rest []any
 	switch v := args[0].(type) {
 	case string:
 		msg = v
@@ -88,10 +74,14 @@ func validateArgs(args ...any) (string, []any) {
 		rest = args[1:]
 		err, ok := v.(*errors.Error)
 		if ok {
+			debug := ""
+			if err.Wrapper != nil {
+				debug = err.Wrapper.Error()
+			}
 			errGroup := slog.Group("error",
 				"code", err.Code.Str(),
 				"msg", err.Code.Msg(),
-				"debug", err.Wrapper.Error(),
+				"debug", debug,
 				"origin", err.StackTrace(),
 			)
 			rest = append(rest, errGroup)
