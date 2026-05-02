@@ -10,48 +10,52 @@
 // The package adds source metadata to every record, stack traces to debug
 // records, and OpenTelemetry integration through the otel subpackage.
 //
-// Installation
+// # Installation
 //
 // Run command in terminal:
 //
-//  go get github.com/jgolang/log
+//	go get github.com/jgolang/log
 //
-// Quick Start
+// # Quick Start
 //
 // This is a simple example of how the package is implemented with a basic function.
 //
-//  package main
+//	package main
 //
-//  import "github.com/jgolang/log"
+//	import "github.com/jgolang/log"
 //
-//  func main(){
-//      log.Info("My info....")
-//  }
+//	func main(){
+//	    log.Info("My info....")
+//	}
 //
 // Output:
 //
-//  {"time":"2026-05-02T10:00:00Z","level":"INFO","msg":"My info....","source":{"func":"main","file":"main.go","line":6}}
+//	{"time":"2026-05-02T10:00:00Z","level":"INFO","msg":"My info....","source":{"func":"main","file":"main.go","line":6}}
 //
-// Configuration
+// # Configuration
 //
 // You can configure the current level and handler programmatically:
 //
-//  log.SetLevel(slog.LevelWarn)
-//  log.NewTextHandler()
-//  log.SetSource(true)
-//  log.SetDebugStackTrace(false)
+//	log.SetLevel(slog.LevelWarn)
+//	log.NewTextHandler()
+//	log.SetSource(true)
+//	log.SetDebugStackTrace(false)
 //
 // The package does not depend on environment variables, and debug stack
 // traces are opt-in.
 //
+// The otel subpackage disables baggage logging by default. If baggage is
+// enabled, prefer allow-lists or explicit filters so sensitive context values
+// are not written to logs accidentally.
+//
 // You can also build isolated logger instances:
 //
-//  logger := log.New(
-//      log.WithLevel(slog.LevelInfo),
-//      log.WithTextHandler(os.Stdout),
-//      log.WithSource(true),
-//      log.WithDebugStackTrace(false),
-//  )
+//	logger := log.New(
+//	    log.WithLevel(slog.LevelInfo),
+//	    log.WithTextHandler(os.Stdout),
+//	    log.WithSource(true),
+//	    log.WithDebugStackTrace(false),
+//	)
 //
-//  logger.Info("service started")
+//	logger.Info("service started")
 package log

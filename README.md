@@ -71,6 +71,11 @@ handler := otel.New(
 )
 ```
 
+Avoid enabling all baggage in production unless the upstream context is already
+sanitized. Baggage can contain tenant identifiers, tokens, or other sensitive
+values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
+`WithBaggageFilter` to keep log output intentional.
+
 <hr>
 
 Released under the [GPL-3.0](LICENSE).

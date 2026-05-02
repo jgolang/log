@@ -3,8 +3,10 @@ package log
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -39,6 +41,47 @@ func TestInfoUsesConfiguredHandler(t *testing.T) {
 
 	if !strings.Contains(buf.String(), "\"msg\":\"hello\"") {
 		t.Fatalf("expected message in output, got %q", buf.String())
+	}
+}
+
+func TestInstanceJSONOutputIncludesLevelMessageAndSource(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(
+		WithJSONHandler(&buf),
+		WithLevel(slog.LevelInfo),
+	)
+
+	instance.Info("hello", "request_id", "abc")
+
+	var entry map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v; output = %q", err, buf.String())
+	}
+	if entry["level"] != "INFO" {
+		t.Fatalf("level = %v, want INFO", entry["level"])
+	}
+	if entry["msg"] != "hello" {
+		t.Fatalf("msg = %v, want hello", entry["msg"])
+	}
+	if entry["request_id"] != "abc" {
+		t.Fatalf("request_id = %v, want abc", entry["request_id"])
+	}
+	if _, ok := entry["source"].(map[string]any); !ok {
+		t.Fatalf("expected source object in output, got %v", entry["source"])
+	}
+}
+
+func TestDisabledLevelDoesNotWrite(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(
+		WithJSONHandler(&buf),
+		WithLevel(slog.LevelWarn),
+	)
+
+	instance.Info("hidden")
+
+	if got := buf.String(); got != "" {
+		t.Fatalf("expected no output for disabled level, got %q", got)
 	}
 }
 
@@ -79,4 +122,28 @@ func TestDebugStackTraceIsOptIn(t *testing.T) {
 	if !strings.Contains(withStack.String(), "stack_trace") {
 		t.Fatalf("expected debug stack trace when enabled, got %q", withStack.String())
 	}
+}
+
+func TestLoggerSupportsConcurrentConfigurationAndLogging(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(
+		WithJSONHandler(&buf),
+		WithLevel(slog.LevelDebug),
+	)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 25; i++ {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			instance.SetSource(i%2 == 0)
+			instance.SetDebugStackTrace(i%3 == 0)
+			instance.SetCalldepth(3)
+		}(i)
+		go func() {
+			defer wg.Done()
+			instance.Debug("hello")
+		}()
+	}
+	wg.Wait()
 }
