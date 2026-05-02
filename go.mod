@@ -1,9 +1,9 @@
 module github.com/jgolang/log
 
-go 1.22.5
+go 1.26.2
 
 require (
-	github.com/jgolang/errors v0.2.0
+	github.com/jgolang/errors v0.2.1
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/trace v1.28.0
 )
