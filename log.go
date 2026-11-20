@@ -76,22 +76,25 @@ func codedErrorOf(err error) *errors.Error {
 	return nil
 }
 
-// codedErrorGroup builds the "error" group for a jgolang/errors error. The code
-// attributes are left out when the code is nil, so logging never panics on the
-// error path it is meant to report.
+// codedErrorGroup builds the "error" group for a jgolang/errors error. code
+// and msg come from errors.CodeOf, which looks past errors whose code is nil;
+// they are left out when the chain has no code, so logging never panics on
+// the error path it is meant to report. debug and origin come from coded, the
+// first jgolang/errors error, which is where the chain was last wrapped.
 func codedErrorGroup(coded *errors.Error) slog.Attr {
 	debug := ""
 	if coded.Wrapper != nil {
 		debug = coded.Wrapper.Error()
 	}
 
-	if coded.Code == nil {
+	code := errors.CodeOf(coded)
+	if code == nil {
 		return slog.Group("error", "debug", debug, "origin", coded.StackTrace())
 	}
 
 	return slog.Group("error",
-		"code", coded.Code.Str(),
-		"msg", coded.Code.Msg(),
+		"code", code.Str(),
+		"msg", code.Msg(),
 		"debug", debug,
 		"origin", coded.StackTrace(),
 	)

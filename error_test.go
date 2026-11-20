@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/jgolang/errors"
@@ -110,6 +111,64 @@ func TestErrorWithTypedNilCodedErrorDoesNotPanic(t *testing.T) {
 
 			if _, isGroup := record["error"].(map[string]any); isGroup {
 				t.Fatalf("expected the plain error attribute, got group %v", record["error"])
+			}
+		})
+	}
+}
+
+var errLogTitleRequired = errors.Define(codes.New("PLN-001", "title is required").WithKind(codes.KindValidation), "title is required")
+
+// failValidation returns the sentinel through Wrap, so its stack starts here.
+//
+//go:noinline
+func failValidation() error {
+	return errors.Wrap(errLogTitleRequired)
+}
+
+func TestErrorLogsDefinedSentinelBehindFmtErrorf(t *testing.T) {
+	record := logErrorRecord(t, fmt.Errorf("creating task: %w", failValidation()))
+
+	group, ok := record["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected an error group, got %v", record["error"])
+	}
+	if group["code"] != "PLN-001" {
+		t.Fatalf("expected code PLN-001, got %v", group["code"])
+	}
+	origin, _ := group["origin"].(map[string]any)
+	if top, _ := origin["frame_0"].(string); !strings.Contains(top, "failValidation") {
+		t.Fatalf("expected origin to start at failValidation, got %v", origin["frame_0"])
+	}
+}
+
+func TestErrorLogsDeeperCodeBehindNilCode(t *testing.T) {
+	coded := errors.NewC(codes.New("PLN-111", "task not found"), "task 42 is missing")
+	nilCode := errors.WrapC(coded, nil)
+
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "unwrapped", err: nilCode},
+		{name: "behind fmt.Errorf", err: fmt.Errorf("loading: %w", nilCode)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			record := logErrorRecord(t, tt.err)
+
+			group, ok := record["error"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected an error group, got %v", record["error"])
+			}
+			if group["code"] != "PLN-111" || group["msg"] != "task not found" {
+				t.Fatalf("expected the deeper code PLN-111, got %v", group)
+			}
+			if _, has := group["debug"]; !has {
+				t.Fatalf("expected a debug attribute, got %v", group)
+			}
+			if origin, ok := group["origin"].(map[string]any); !ok || len(origin) == 0 {
+				t.Fatalf("expected a non-empty origin, got %v", group["origin"])
 			}
 		})
 	}
