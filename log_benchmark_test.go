@@ -1,9 +1,13 @@
 package log
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
+
+	"github.com/jgolang/errors"
+	"github.com/jgolang/errors/codes"
 )
 
 func BenchmarkLoggerInfo(b *testing.B) {
@@ -61,6 +65,27 @@ func BenchmarkLoggerInfo(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				tt.log(logger)
+			}
+		})
+	}
+}
+
+func BenchmarkValidateArgs(b *testing.B) {
+	coded := errors.NewC(codes.AppValidation, "invalid value")
+	tests := []struct {
+		name string
+		args []any
+	}{
+		{name: "string", args: []any{"hello", "request_id", "abc"}},
+		{name: "coded_error", args: []any{coded, "request_id", "abc"}},
+		{name: "wrapped_coded_error", args: []any{fmt.Errorf("loading: %w", coded), "request_id", "abc"}},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				validateArgs(tt.args...)
 			}
 		})
 	}
