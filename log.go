@@ -1,6 +1,7 @@
 package log
 
 import (
+	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -59,6 +60,43 @@ func Level() slog.Level {
 	return level.Level()
 }
 
+// codedErrorOf returns the first jgolang/errors error in err's chain, or nil.
+// The type assertion keeps the common unwrapped case free of the allocation
+// errors.As costs; errors.As finds one behind wrappers such as fmt.Errorf.
+func codedErrorOf(err error) *errors.Error {
+	if coded, ok := err.(*errors.Error); ok {
+		return coded
+	}
+
+	var coded *errors.Error
+	if stderrors.As(err, &coded) {
+		return coded
+	}
+
+	return nil
+}
+
+// codedErrorGroup builds the "error" group for a jgolang/errors error. The code
+// attributes are left out when the code is nil, so logging never panics on the
+// error path it is meant to report.
+func codedErrorGroup(coded *errors.Error) slog.Attr {
+	debug := ""
+	if coded.Wrapper != nil {
+		debug = coded.Wrapper.Error()
+	}
+
+	if coded.Code == nil {
+		return slog.Group("error", "debug", debug, "origin", coded.StackTrace())
+	}
+
+	return slog.Group("error",
+		"code", coded.Code.Str(),
+		"msg", coded.Code.Msg(),
+		"debug", debug,
+		"origin", coded.StackTrace(),
+	)
+}
+
 func validateArgs(args ...any) (string, []any) {
 	if len(args) == 0 {
 		return "", nil
@@ -72,19 +110,8 @@ func validateArgs(args ...any) (string, []any) {
 	case error:
 		msg = v.Error()
 		rest = args[1:]
-		err, ok := v.(*errors.Error)
-		if ok {
-			debug := ""
-			if err.Wrapper != nil {
-				debug = err.Wrapper.Error()
-			}
-			errGroup := slog.Group("error",
-				"code", err.Code.Str(),
-				"msg", err.Code.Msg(),
-				"debug", debug,
-				"origin", err.StackTrace(),
-			)
-			rest = append(rest, errGroup)
+		if coded := codedErrorOf(v); coded != nil {
+			rest = append(rest, codedErrorGroup(coded))
 		} else {
 			rest = append(rest, "error", v)
 		}
