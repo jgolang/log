@@ -1,3 +1,10 @@
+// Package otel provides a log/slog handler that adds OpenTelemetry trace
+// context, and optionally filtered baggage, to records written through
+// github.com/jgolang/log. It is its own module, so programs that do not use it
+// do not depend on OpenTelemetry. Upgrading from log v1.4.x or earlier, raise
+// both modules together:
+//
+//	go get github.com/jgolang/log@v1.5.0 github.com/jgolang/log/otel@v1.5.0
 package otel
 
 import (
