@@ -47,6 +47,24 @@ log.SetDebugStackTrace(false)
 The package no longer depends on a `MODE` environment variable.
 Debug stack traces are now opt-in.
 
+## Fatal
+
+`Fatal`, `FatalC` and the `Logger` methods `Fatal` and `FatalContext` log the message and then call `os.Exit(1)`. Like `os.Exit`, they do not run deferred functions: a `defer` that flushes OpenTelemetry providers, closes a database or writes buffered output is skipped. Flush and close what you need before calling them, or keep the deferred cleanup in a function that returns the error, so it runs before you exit:
+
+```go
+func main() {
+	if err := run(); err != nil {
+		log.Fatal(err) // run's defers have already run
+	}
+}
+
+func run() error {
+	defer shutdownTelemetry()
+	// ...
+	return nil
+}
+```
+
 ## Instance API
 
 ```go

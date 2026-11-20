@@ -31,12 +31,16 @@ func PanicC(ctx context.Context, args ...any) {
 }
 
 // Fatal logs a fatal-level message using the global logger and then calls os.Exit(1).
+// Like os.Exit, it does not run deferred functions, so flush telemetry and
+// close resources before calling it.
 func Fatal(args ...any) {
 	msg, attrs := validateArgs(args...)
 	std.Fatal(msg, attrs...)
 }
 
 // FatalC logs a fatal-level message with context using the global logger and then calls os.Exit(1).
+// Like os.Exit, it does not run deferred functions, so flush telemetry and
+// close resources before calling it.
 // ctx: The context for the log entry.
 func FatalC(ctx context.Context, args ...any) {
 	msg, attrs := validateArgs(args...)
