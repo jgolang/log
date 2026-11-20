@@ -147,3 +147,38 @@ func TestLoggerSupportsConcurrentConfigurationAndLogging(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestInfoKeepsAnyFirstArgumentAsMessage(t *testing.T) {
+	type point struct{ X, Y int }
+
+	tests := []struct {
+		name    string
+		first   any
+		wantMsg string
+	}{
+		{name: "int", first: 42, wantMsg: "42"},
+		{name: "struct", first: point{X: 1, Y: 2}, wantMsg: "{1 2}"},
+		{name: "nil", first: nil, wantMsg: "<nil>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			std.SetJSONHandler(&buf)
+			t.Cleanup(NewJSONHandler)
+
+			Info(tt.first, "request_id", "abc")
+
+			var record map[string]any
+			if err := json.Unmarshal(buf.Bytes(), &record); err != nil {
+				t.Fatalf("decode %q: %v", buf.String(), err)
+			}
+			if record["msg"] != tt.wantMsg {
+				t.Fatalf("expected message %q, got %v", tt.wantMsg, record["msg"])
+			}
+			if record["request_id"] != "abc" {
+				t.Fatalf("expected request_id attribute, got %v", record["request_id"])
+			}
+		})
+	}
+}

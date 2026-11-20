@@ -116,7 +116,8 @@ func validateArgs(args ...any) (string, []any) {
 			rest = append(rest, "error", v)
 		}
 	default:
-		msg = fmt.Sprintf("Unknown type: %T", v)
+		// Keep the caller's value instead of dropping it (LOG-03).
+		msg = fmt.Sprint(v)
 		rest = args[1:]
 	}
 	return msg, rest

@@ -77,6 +77,7 @@ func BenchmarkValidateArgs(b *testing.B) {
 		args []any
 	}{
 		{name: "string", args: []any{"hello", "request_id", "abc"}},
+		{name: "other_value", args: []any{42, "request_id", "abc"}},
 		{name: "coded_error", args: []any{coded, "request_id", "abc"}},
 		{name: "wrapped_coded_error", args: []any{fmt.Errorf("loading: %w", coded), "request_id", "abc"}},
 	}

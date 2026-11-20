@@ -32,6 +32,13 @@
 //
 //	{"time":"2026-05-02T10:00:00Z","level":"INFO","msg":"My info....","source":{"func":"main","file":"main.go","line":6}}
 //
+// The first argument is the message; the rest are key-value attributes. A
+// string is used as is. An error becomes the message and also adds an "error"
+// attribute: for a jgolang/errors error anywhere in its chain (also behind
+// fmt.Errorf) it is a group with code, msg, debug and origin (code and msg are
+// left out when the error has no code); for any other error it is the error
+// itself. Any other value is printed with fmt.Sprint.
+//
 // # Configuration
 //
 // You can configure the current level and handler programmatically:
