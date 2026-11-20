@@ -8,7 +8,9 @@
 // Package log provides structured logging helpers built on top of log/slog.
 //
 // The package adds source metadata to every record, stack traces to debug
-// records, and OpenTelemetry integration through the otel subpackage.
+// records, and OpenTelemetry integration through the separate module
+// github.com/jgolang/log/otel, so importing this package adds no
+// OpenTelemetry requirement.
 //
 // # Installation
 //
@@ -57,7 +59,7 @@
 // The package does not depend on environment variables, and debug stack
 // traces are opt-in.
 //
-// The otel subpackage disables baggage logging by default. If baggage is
+// The otel module (github.com/jgolang/log/otel) disables baggage logging by default. If baggage is
 // enabled, prefer allow-lists or explicit filters so sensitive context values
 // are not written to logs accidentally.
 //

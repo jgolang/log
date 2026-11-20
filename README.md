@@ -80,6 +80,16 @@ logger.Info("service started")
 
 ## OpenTelemetry
 
+`github.com/jgolang/log/otel` is its own module since `log` v1.5.0, so importing `jgolang/log` adds no OpenTelemetry requirement.
+
+Upgrading from `log` v1.4.x or earlier, where `otel` was part of the root module, raise both together:
+
+```sh
+go get github.com/jgolang/log@v1.5.0 github.com/jgolang/log/otel@v1.5.0
+```
+
+Raising only `log` makes Go report that no required module provides `github.com/jgolang/log/otel`; `log/otel` v1.5.0 requires `log` v1.5.0, so adding it raises `log` too. New users run `go get github.com/jgolang/log/otel`.
+
 The `otel` handler now disables baggage logging by default.
 If you need baggage in logs, enable it explicitly and prefer an allow-list:
 
@@ -103,6 +113,7 @@ go test ./...
 go test -race ./...
 go vet ./...
 go test -bench=. -run=^$ ./...
+(cd otel && go test ./... && go test -race ./... && go vet ./...)
 ```
 
 Use the benchmarks to compare source metadata, disabled levels, and debug stack
