@@ -210,13 +210,17 @@ func (l *Logger) PanicContext(ctx context.Context, msg string, args ...any) {
 	panic(msg)
 }
 
-// Fatal logs a fatal-level message, then exits the application.
+// Fatal logs a fatal-level message, then calls os.Exit(1).
+// Like os.Exit, it does not run deferred functions, so flush telemetry and
+// close resources before calling it.
 func (l *Logger) Fatal(msg string, args ...any) {
 	l.log(context.Background(), LevelFatal, msg, args, false)
 	os.Exit(1)
 }
 
-// FatalContext logs a fatal-level message with context, then exits the application.
+// FatalContext logs a fatal-level message with context, then calls os.Exit(1).
+// Like os.Exit, it does not run deferred functions, so flush telemetry and
+// close resources before calling it.
 func (l *Logger) FatalContext(ctx context.Context, msg string, args ...any) {
 	l.log(ctx, LevelFatal, msg, args, false)
 	os.Exit(1)

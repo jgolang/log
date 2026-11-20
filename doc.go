@@ -39,6 +39,12 @@
 // left out when the error has no code); for any other error it is the error
 // itself. Any other value is printed with fmt.Sprint.
 //
+// # Fatal
+//
+// Fatal, FatalC and the Logger methods Fatal and FatalContext call os.Exit(1)
+// after logging, so deferred functions do not run. Keep deferred cleanup in a
+// function that returns the error, and call Fatal after it returns.
+//
 // # Configuration
 //
 // You can configure the current level and handler programmatically:
