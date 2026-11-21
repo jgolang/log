@@ -7,25 +7,36 @@ import (
 	"github.com/jgolang/log/logger"
 )
 
+// Logger is a configurable logger instance, created with [New]. It is an
+// alias of the implementation type in package logger, so values of either
+// name are interchangeable.
 type Logger = logger.Logger
+
+// Option configures a [Logger] created with [New].
 type Option = logger.Option
 
+// WithLevel sets the initial logging level of a [Logger].
 func WithLevel(level slog.Level) Option {
 	return logger.WithLevel(level)
 }
 
+// WithSource controls whether a [Logger] attaches source metadata to records.
 func WithSource(enabled bool) Option {
 	return logger.WithSource(enabled)
 }
 
+// WithDebugStackTrace controls whether a [Logger] adds a stack trace to debug
+// records.
 func WithDebugStackTrace(enabled bool) Option {
 	return logger.WithDebugStackTrace(enabled)
 }
 
+// WithJSONHandler makes a [Logger] write JSON records to w.
 func WithJSONHandler(w io.Writer) Option {
 	return logger.WithJSONHandler(w)
 }
 
+// WithTextHandler makes a [Logger] write text records to w.
 func WithTextHandler(w io.Writer) Option {
 	return logger.WithTextHandler(w)
 }

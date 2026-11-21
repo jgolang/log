@@ -4,12 +4,15 @@ import (
 	"log/slog"
 )
 
+// Levels this package adds to the slog levels. Trace is below slog.LevelDebug;
+// Fatal and Panic are above slog.LevelError.
 const (
 	LevelTrace = slog.Level(-8)
 	LevelFatal = slog.Level(12)
 	LevelPanic = slog.Level(13)
 )
 
+// LevelNames maps the custom levels to the names [ReplaceAttr] writes for them.
 var LevelNames = map[slog.Leveler]string{
 	LevelTrace: "TRACE",
 	LevelFatal: "FATAL",
