@@ -84,7 +84,9 @@ type OtelHandler struct {
 	NoBaggage bool
 	// NoTraceEvents determines whether to record an event for every log on the active trace.
 	NoTraceEvents bool
-	// BaggageFilter can allow, drop, or redact baggage members before they are logged.
+	// BaggageFilter can allow, drop, or redact baggage members before they are
+	// logged. The baggage filter options add to it; setting the field directly
+	// replaces it.
 	BaggageFilter BaggageFilter
 
 	// groupPrefix is the dot-joined path of the groups opened with WithGroup.
@@ -118,14 +120,36 @@ func WithNoTraceEvents(noTraceEvents bool) OtelHandlerOpt {
 	}
 }
 
-// WithBaggageFilter configures a baggage filter for selective logging/redaction.
+// WithBaggageFilter adds a baggage filter for selective logging/redaction.
+// Baggage filter options (WithBaggageFilter, WithBaggageAllowList,
+// WithBaggageDenyList) compose in the order given: a member is logged only
+// when every filter keeps it, and each filter receives the value returned by
+// the previous one. A nil filter is ignored.
 func WithBaggageFilter(filter BaggageFilter) OtelHandlerOpt {
 	return func(handler *OtelHandler) {
-		handler.BaggageFilter = filter
+		handler.BaggageFilter = composeBaggageFilters(handler.BaggageFilter, filter)
 	}
 }
 
-// WithBaggageAllowList only logs baggage members whose keys are explicitly listed.
+// composeBaggageFilters returns a filter that applies first and then second.
+func composeBaggageFilters(first, second BaggageFilter) BaggageFilter {
+	if first == nil {
+		return second
+	}
+	if second == nil {
+		return first
+	}
+	return func(key, value string) (string, bool) {
+		value, ok := first(key, value)
+		if !ok {
+			return "", false
+		}
+		return second(key, value)
+	}
+}
+
+// WithBaggageAllowList only logs baggage members whose keys are explicitly
+// listed. It composes with the other baggage filter options.
 func WithBaggageAllowList(keys ...string) OtelHandlerOpt {
 	allowed := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
@@ -139,6 +163,7 @@ func WithBaggageAllowList(keys ...string) OtelHandlerOpt {
 }
 
 // WithBaggageDenyList drops baggage members whose keys are explicitly listed.
+// It composes with the other baggage filter options.
 func WithBaggageDenyList(keys ...string) OtelHandlerOpt {
 	denied := make(map[string]struct{}, len(keys))
 	for _, key := range keys {

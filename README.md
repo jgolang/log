@@ -145,6 +145,8 @@ sanitized. Baggage can contain tenant identifiers, tokens, or other sensitive
 values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
 `WithBaggageFilter` to keep log output intentional.
 
+From `log/otel` v1.9.0 these options compose in the order given: a member is logged only when every filter keeps it, and each filter sees the value the previous one returned. Earlier versions kept only the last of them, and `WithBaggageFilter(nil)` cleared the others; it is now ignored. Setting the `BaggageFilter` field directly still replaces every filter.
+
 ## Verification
 
 ```bash
