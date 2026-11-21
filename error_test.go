@@ -285,3 +285,18 @@ func TestNonCodedErrorAttributeStaysString(t *testing.T) {
 		})
 	}
 }
+
+func TestCodedErrorAttributeOfStacklessSentinelHasEmptyDebug(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(WithJSONHandler(&buf))
+
+	instance.Error("failed", "error", errLogTitleRequired)
+
+	group, ok := decodeRecord(t, &buf)["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected an error group, got %q", buf.String())
+	}
+	if debug, has := group["debug"]; !has || debug != "" {
+		t.Fatalf("expected an empty debug attribute, got %v", group)
+	}
+}
