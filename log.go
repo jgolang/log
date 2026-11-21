@@ -89,7 +89,7 @@ func validateArgs(args ...any) (string, []any) {
 		msg = v
 		rest = args[1:]
 	case error:
-		msg = v.Error()
+		msg = codederror.Text(v)
 		// Clip so append never writes into spare capacity of the caller's slice.
 		rest = slices.Clip(args[1:])
 		// The group has no text attribute: msg already carries v.Error().
