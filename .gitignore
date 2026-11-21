@@ -1,1 +1,11 @@
 AGENTS.md
+
+# OS and editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Test binaries and coverage output
+*.test
+*.out
+coverage.*
