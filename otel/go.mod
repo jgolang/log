@@ -3,12 +3,12 @@ module github.com/jgolang/log/otel
 go 1.26.2
 
 require (
-	github.com/jgolang/log v1.5.0
+	github.com/jgolang/log v1.7.1
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/trace v1.28.0
 )
 
 require (
 	github.com/go-errors/errors v1.5.1 // indirect
-	github.com/jgolang/errors v0.2.1 // indirect
+	github.com/jgolang/errors v0.6.1 // indirect
 )
