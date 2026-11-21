@@ -128,6 +128,8 @@ logger.InfoContext(ctx, "order created") // the span event carries request_id
 
 On `log/otel` v1.6.x and earlier, `WithAttrs` attributes reach the log line only.
 
+Span event string values are capped at 1 KiB and end with `…`. From `log/otel` v1.8.0, slice values (`[]string`, `[]int`, `[]int64`, `[]float64`, `[]bool`) also keep only their first 128 elements; the log line still gets the full record.
+
 The `otel` handler disables baggage logging by default.
 If you need baggage in logs, enable it explicitly and prefer an allow-list:
 
