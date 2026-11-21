@@ -2,7 +2,7 @@
 
 Before tagging a release:
 
-- Run `go test ./...`, `go test -race ./...`, and `go vet ./...` in the root and in `otel/` (its own module).
+- Run `gofmt -l .` (no output), `go test ./...`, `go test -race ./...`, `go vet ./...`, and `govulncheck ./...` in the root and in `otel/` (its own module). CI runs the same checks; do not tag a red master.
 - Run `go test -bench=. ./...` when logging performance changed.
 - Review exported API changes with `go doc ./...`; deprecate before removing public names.
 - Confirm README examples still match current defaults.
