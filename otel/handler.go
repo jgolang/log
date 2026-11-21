@@ -60,7 +60,8 @@ const (
 // groups (WithGroup) first, e.g. "req.error.origin". slog.Duration values are
 // recorded as int64 nanoseconds; slog.Uint64 values as int64, or as a decimal
 // string when they exceed math.MaxInt64. String values longer than 1 KiB are
-// truncated and end with "…".
+// truncated and end with "…". Attributes added with WithAttrs (logger.With)
+// are passed to Next but are not recorded on span events.
 type OtelHandler struct {
 	// Next represents the next handler in the chain.
 	Next slog.Handler
@@ -328,9 +329,14 @@ func capString(s string) string {
 	if len(s) <= maxAttributeValueLen {
 		return s
 	}
+	// Step back at most to the start of a rune; invalid UTF-8 (no rune start
+	// within utf8.UTFMax bytes) is cut at the cap so the value is not lost.
 	cut := maxAttributeValueLen
-	for cut > 0 && !utf8.RuneStart(s[cut]) {
+	for cut > maxAttributeValueLen-utf8.UTFMax && !utf8.RuneStart(s[cut]) {
 		cut--
+	}
+	if !utf8.RuneStart(s[cut]) {
+		cut = maxAttributeValueLen
 	}
 	return s[:cut] + truncationMarker
 }

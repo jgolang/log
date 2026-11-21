@@ -398,3 +398,14 @@ func TestSpanEventMessageAndStatusAreCapped(t *testing.T) {
 		t.Fatalf("status description len = %d, want %d", len(span.statusDescription), len(want))
 	}
 }
+
+func TestCapStringKeepsInvalidUTF8UpToTheCap(t *testing.T) {
+	value := strings.Repeat("\x80", 2000)
+
+	capped := capString(value)
+
+	want := maxAttributeValueLen + len(truncationMarker)
+	if len(capped) != want {
+		t.Fatalf("expected %d bytes, got %d", want, len(capped))
+	}
+}
