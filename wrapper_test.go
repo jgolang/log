@@ -5,6 +5,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -214,5 +216,94 @@ func TestSetHandlerWrapperOnZeroValueLoggerDoesNotPanic(t *testing.T) {
 				t.Fatalf("expected no handler to run without a built handler, got %d records", *handled)
 			}
 		})
+	}
+}
+
+// pcRecordingHandler records the call site that record.PC points at, which is
+// what a wrapper with AddSource or an OpenTelemetry bridge reports.
+type pcRecordingHandler struct {
+	slog.Handler
+	site *callSite
+}
+
+func (h pcRecordingHandler) Handle(ctx context.Context, record slog.Record) error {
+	frame, _ := runtime.CallersFrames([]uintptr{record.PC}).Next()
+	*h.site = callSite{
+		function: frame.Function[strings.LastIndex(frame.Function, ".")+1:],
+		file:     filepath.Base(frame.File),
+		line:     frame.Line,
+	}
+	return h.Handler.Handle(ctx, record)
+}
+
+func newPCRecordingWrapper() (func(slog.Handler) slog.Handler, *callSite) {
+	site := new(callSite)
+	return func(next slog.Handler) slog.Handler {
+		return pcRecordingHandler{Handler: next, site: site}
+	}, site
+}
+
+func TestHandlerWrapperSeesCallerPC(t *testing.T) {
+	t.Run("instance API", func(t *testing.T) {
+		wrap, got := newPCRecordingWrapper()
+		instance := New(WithJSONHandler(io.Discard), WithHandlerWrapper(wrap))
+
+		want := nextLine()
+		instance.Info("hello")
+
+		if *got != want {
+			t.Fatalf("record.PC = %+v, want %+v", *got, want)
+		}
+	})
+
+	t.Run("instance API without source metadata", func(t *testing.T) {
+		wrap, got := newPCRecordingWrapper()
+		instance := New(WithJSONHandler(io.Discard), WithHandlerWrapper(wrap), WithSource(false))
+
+		want := nextLine()
+		instance.WarnContext(context.Background(), "hello")
+
+		if *got != want {
+			t.Fatalf("record.PC = %+v, want %+v", *got, want)
+		}
+	})
+
+	t.Run("package-level helpers", func(t *testing.T) {
+		usePackageJSONHandler(t)
+		wrap, got := newPCRecordingWrapper()
+		SetHandlerWrapper(wrap)
+		t.Cleanup(func() { SetHandlerWrapper(nil) })
+
+		want := nextLine()
+		InfoC(context.Background(), "hello")
+
+		if *got != want {
+			t.Fatalf("record.PC = %+v, want %+v", *got, want)
+		}
+	})
+}
+
+// contextRecordingHandler records whether Handle received a nil context.
+type contextRecordingHandler struct {
+	slog.Handler
+	gotNil *bool
+}
+
+func (h contextRecordingHandler) Handle(ctx context.Context, record slog.Record) error {
+	*h.gotNil = ctx == nil
+	return h.Handler.Handle(ctx, record)
+}
+
+func TestHandlerWrapperNeverSeesNilContext(t *testing.T) {
+	gotNil := new(bool)
+	instance := New(WithJSONHandler(io.Discard), WithHandlerWrapper(func(next slog.Handler) slog.Handler {
+		return contextRecordingHandler{Handler: next, gotNil: gotNil}
+	}))
+	var nilContext context.Context
+
+	instance.InfoContext(nilContext, "hello")
+
+	if *gotNil {
+		t.Fatal("expected a nil context to reach the handler as context.Background()")
 	}
 }

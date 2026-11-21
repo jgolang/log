@@ -15,6 +15,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"time"
 )
 
 // Priority represents the level of importance for log messages. Higher values indicate greater importance.
@@ -197,7 +198,14 @@ func (l *Logger) SetHandlerWrapper(wrap func(slog.Handler) slog.Handler) {
 // log is called directly by every exported logging method, so that a
 // calldepth of 3 reports the caller of that method: runtime.Callers, callers,
 // log, the method, then its caller.
+//
+// The record is built here rather than with slog.Logger.Log, so that its PC is
+// that caller too: a handler wrapper that reads record.PC (AddSource, an
+// OpenTelemetry bridge) reports the same call site as the source attribute.
 func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args []any) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	cfg := l.snapshot()
 	if cfg.logger == nil || !cfg.logger.Enabled(ctx, level) {
 		return
@@ -205,15 +213,26 @@ func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args []a
 	// Clip so appends never write into spare capacity of the caller's slice;
 	// a copy made by expandCodedErrors is ours to extend.
 	args = expandCodedErrors(slices.Clip(args))
+	var pc uintptr
 	if cfg.addSource {
 		withStack := level == slog.LevelDebug && cfg.debugStack
 		depth := 1
 		if withStack {
 			depth = maxStackDepth
 		}
-		args = append(args, sourceAttr(callers(cfg.calldepth+1, depth), withStack))
+		pcs := callers(cfg.calldepth+1, depth)
+		if len(pcs) > 0 {
+			pc = pcs[0]
+		}
+		args = append(args, sourceAttr(pcs, withStack))
+	} else {
+		pc = callerPC(cfg.calldepth + 1)
 	}
-	cfg.logger.Log(ctx, level, msg, args...)
+	record := slog.NewRecord(time.Now(), level, msg, pc)
+	record.Add(args...)
+	// A logging call has no error to return and no other place to report a
+	// failed write; slog.Logger.Log drops the handler's error the same way.
+	_ = cfg.logger.Handler().Handle(ctx, record)
 }
 
 // SetJSONHandler configures the logger to emit JSON logs to the provided writer.
