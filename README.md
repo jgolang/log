@@ -119,6 +119,15 @@ logger := log.New(log.WithHandlerWrapper(otel.NewOtelHandler()))
 logger.InfoContext(ctx, "order created")
 ```
 
+Span events carry the record's attributes and, from `log/otel` v1.7.0, the attributes added with the handler's `WithAttrs`, with the same keys and size caps, for example on a `*slog.Logger` built on the handler:
+
+```go
+logger := slog.New(otel.New(slog.NewJSONHandler(os.Stdout, nil))).With("request_id", id)
+logger.InfoContext(ctx, "order created") // the span event carries request_id
+```
+
+On `log/otel` v1.6.x and earlier, `WithAttrs` attributes reach the log line only.
+
 The `otel` handler disables baggage logging by default.
 If you need baggage in logs, enable it explicitly and prefer an allow-list:
 

@@ -409,3 +409,144 @@ func TestCapStringKeepsInvalidUTF8UpToTheCap(t *testing.T) {
 		t.Fatalf("expected %d bytes, got %d", want, len(capped))
 	}
 }
+
+func TestSpanEventRecordsHandlerAttrs(t *testing.T) {
+	tests := []struct {
+		name    string
+		logger  func(*slog.Logger) *slog.Logger
+		wantKey string
+		want    attribute.Value
+	}{
+		{
+			name:    "attr added with With",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.With("request_id", "r1") },
+			wantKey: "request_id",
+			want:    attribute.StringValue("r1"),
+		},
+		{
+			name:    "kind converted as record attrs",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.With(slog.Duration("elapsed", time.Second)) },
+			wantKey: "elapsed",
+			want:    attribute.Int64Value(int64(time.Second)),
+		},
+		{
+			name:    "attr after WithGroup gets the group prefix",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.WithGroup("req").With("id", 1) },
+			wantKey: "req.id",
+			want:    attribute.Int64Value(1),
+		},
+		{
+			name:    "attr before WithGroup keeps the outer prefix",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.With("id", 1).WithGroup("req") },
+			wantKey: "id",
+			want:    attribute.Int64Value(1),
+		},
+		{
+			name:    "group attr nests under handler groups",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.WithGroup("req").With(slog.Group("user", "id", "u1")) },
+			wantKey: "req.user.id",
+			want:    attribute.StringValue("u1"),
+		},
+		{
+			name:    "long value is capped",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.With("k", strings.Repeat("x", 2*maxAttributeValueLen)) },
+			wantKey: "k",
+			want:    attribute.StringValue(strings.Repeat("x", maxAttributeValueLen) + truncationMarker),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx, span := newSpanLogger(t)
+
+			tt.logger(logger).InfoContext(ctx, "msg")
+
+			if got := eventAttr(t, span, tt.wantKey); got != tt.want {
+				t.Fatalf("%s = %v, want %v", tt.wantKey, got.Emit(), tt.want.Emit())
+			}
+		})
+	}
+}
+
+func TestSpanEventHandlerAttrsComeBeforeRecordAttrs(t *testing.T) {
+	logger, ctx, span := newSpanLogger(t)
+
+	logger.With("a", 1).With("b", 2).InfoContext(ctx, "msg", "c", 3)
+
+	if len(span.events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(span.events))
+	}
+	var keys []string
+	for _, attr := range span.events[0].attrs[3:] { // after message, level and time
+		keys = append(keys, string(attr.Key))
+	}
+	if got := strings.Join(keys, ","); got != "a,b,c" {
+		t.Fatalf("event attribute keys = %s, want a,b,c", got)
+	}
+}
+
+func TestSpanEventHandlerAttrsAreNotSharedBetweenSiblings(t *testing.T) {
+	logger, ctx, span := newSpanLogger(t)
+	parent := logger.With("p", 1, "q", 2, "r", 3) // three attrs leave spare capacity on a plain append
+	first := parent.With("first", 1)
+	second := parent.With("second", 2)
+
+	first.InfoContext(ctx, "msg")
+	second.InfoContext(ctx, "msg")
+
+	if len(span.events) != 2 {
+		t.Fatalf("events len = %d, want 2", len(span.events))
+	}
+	tests := []struct {
+		name    string
+		attrs   []attribute.KeyValue
+		want    []string
+		notWant string
+	}{
+		{"first", span.events[0].attrs, []string{"p", "q", "r", "first"}, "second"},
+		{"second", span.events[1].attrs, []string{"p", "q", "r", "second"}, "first"},
+	}
+	for _, tt := range tests {
+		for _, key := range tt.want {
+			if !hasAttr(tt.attrs, key) {
+				t.Fatalf("%s logger event lacks %q: %v", tt.name, key, tt.attrs)
+			}
+		}
+		if hasAttr(tt.attrs, tt.notWant) {
+			t.Fatalf("%s logger event has sibling attr %q: %v", tt.name, tt.notWant, tt.attrs)
+		}
+	}
+}
+
+func TestSpanEventHandlerAttrsReachNextOnce(t *testing.T) {
+	var buf bytes.Buffer
+	span := &recordingSpan{}
+	ctx := trace.ContextWithSpan(context.Background(), span)
+	logger := slog.New(New(slog.NewJSONHandler(&buf, nil))).With("request_id", "r1")
+
+	logger.InfoContext(ctx, "msg")
+
+	if got := strings.Count(buf.String(), `"request_id"`); got != 1 {
+		t.Fatalf("request_id appears %d times in %s, want 1", got, buf.String())
+	}
+}
+
+func TestNoTraceEventsSkipsHandlerAttrs(t *testing.T) {
+	span := &recordingSpan{}
+	ctx := trace.ContextWithSpan(context.Background(), span)
+	logger := slog.New(New(slog.NewJSONHandler(&bytes.Buffer{}, nil), WithNoTraceEvents(true))).With("request_id", "r1")
+
+	logger.InfoContext(ctx, "msg")
+
+	if len(span.events) != 0 {
+		t.Fatalf("events len = %d, want 0", len(span.events))
+	}
+}
+
+func hasAttr(attrs []attribute.KeyValue, key string) bool {
+	for _, attr := range attrs {
+		if string(attr.Key) == key {
+			return true
+		}
+	}
+	return false
+}
