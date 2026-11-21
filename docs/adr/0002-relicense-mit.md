@@ -11,7 +11,7 @@ log and log/otel were GPL-3.0, while api, errors and helpers are MIT. Any distri
 
 Relicense log and log/otel from GPL-3.0 to MIT, from v1.7.1 and otel/v1.6.1. The root `LICENSE` covers the otel module.
 
-The repository has one author. The epic 8 retrospective found six commits from 2019 (`a93cbb4` to `b9fdd9b`, the initial module setup) recorded with a work e-mail domain. The owner confirmed the code is his own work, so he can relicense all of it.
+The repository has one author. The epic 8 retrospective found six commits from 2019 (`a93cbb4` to `b9fdd9b`, the initial module setup) recorded with a work e-mail domain. The owner confirmed that this code is the owner's own work, so the owner can relicense all of it.
 
 ## Consequences
 
