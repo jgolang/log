@@ -12,6 +12,16 @@
 // github.com/jgolang/log/otel, so importing this package adds no
 // OpenTelemetry requirement.
 //
+// # Import path
+//
+// Import github.com/jgolang/log, this package, for both the package-level
+// helpers (Info, ErrorC, ...) and the instance API ([New] with options such
+// as [WithLevel]). Package github.com/jgolang/log/logger is the
+// implementation behind it: [Logger] and [Option] are aliases of its types,
+// so the same types are reachable from both paths. Import logger only for
+// what this package does not re-export, such as the custom level
+// logger.LevelTrace.
+//
 // # Installation
 //
 // Run command in terminal:
