@@ -47,6 +47,12 @@ log.SetDebugStackTrace(false)
 The package no longer depends on a `MODE` environment variable.
 Debug stack traces are now opt-in.
 
+`source` reports the code that calls the logging function. If you log through your own helper, raise the call depth by one per wrapper function so `source` points at the helper's caller:
+
+```go
+log.SetCalldepth(4) // default 3; Logger.SetCalldepth works the same way
+```
+
 ## Fatal
 
 `Fatal`, `FatalC` and the `Logger` methods `Fatal` and `FatalContext` log the message and then call `os.Exit(1)`. Like `os.Exit`, they do not run deferred functions: a `defer` that flushes OpenTelemetry providers, closes a database or writes buffered output is skipped. Flush and close what you need before calling them, or keep the deferred cleanup in a function that returns the error, so it runs before you exit:
