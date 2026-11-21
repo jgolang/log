@@ -66,7 +66,9 @@ const (
 // recorded as int64 nanoseconds; slog.Uint64 values as int64, or as a decimal
 // string when they exceed math.MaxInt64. String values longer than 1 KiB are
 // truncated and end with "…". Attributes added with WithAttrs (logger.With)
-// are passed to Next but are not recorded on span events.
+// are recorded on every span event the derived handler adds, before the
+// record's own attributes, with the same keys, kinds and caps; they are
+// converted once, when WithAttrs is called.
 type OtelHandler struct {
 	// Next represents the next handler in the chain.
 	Next slog.Handler
@@ -79,6 +81,9 @@ type OtelHandler struct {
 
 	// groupPrefix is the dot-joined path of the groups opened with WithGroup.
 	groupPrefix string
+	// attrs are the span event attributes added with WithAttrs, converted
+	// with the group prefix in effect when they were added.
+	attrs []attribute.KeyValue
 }
 
 // OtelHandlerOpt configures an [OtelHandler] built with [New] or
@@ -186,17 +191,13 @@ func (h OtelHandler) Handle(ctx context.Context, record slog.Record) error {
 
 	if !h.NoTraceEvents {
 		// Adding log info to span event.
-		eventAttrs := make([]attribute.KeyValue, 0, record.NumAttrs())
+		eventAttrs := make([]attribute.KeyValue, 0, 3+len(h.attrs)+record.NumAttrs())
 		eventAttrs = append(eventAttrs, attribute.String(slog.MessageKey, capString(record.Message)))
 		eventAttrs = append(eventAttrs, attribute.String(slog.LevelKey, record.Level.String()))
 		eventAttrs = append(eventAttrs, attribute.String(slog.TimeKey, record.Time.Format(time.RFC3339Nano)))
+		eventAttrs = append(eventAttrs, h.attrs...)
 		record.Attrs(func(attr slog.Attr) bool {
-			otelAttrs := h.slogAttrToOtelAttr(attr, h.groupPrefix)
-			for _, otelAttr := range otelAttrs {
-				if otelAttr.Valid() {
-					eventAttrs = append(eventAttrs, otelAttr)
-				}
-			}
+			eventAttrs = h.appendEventAttrs(eventAttrs, attr)
 			return true
 		})
 
@@ -233,7 +234,33 @@ func (h OtelHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		NoTraceEvents: h.NoTraceEvents,
 		BaggageFilter: h.BaggageFilter,
 		groupPrefix:   h.groupPrefix,
+		attrs:         h.appendAttrs(attrs),
 	}
+}
+
+// appendAttrs returns a new slice with the handler's span event attributes
+// followed by attrs converted under the current group prefix. It never
+// appends to h.attrs, so handlers derived from the same parent do not share
+// their attributes.
+func (h OtelHandler) appendAttrs(attrs []slog.Attr) []attribute.KeyValue {
+	converted := make([]attribute.KeyValue, len(h.attrs), len(h.attrs)+len(attrs))
+	copy(converted, h.attrs)
+	for _, attr := range attrs {
+		converted = h.appendEventAttrs(converted, attr)
+	}
+	return converted
+}
+
+// appendEventAttrs converts attr under the current group prefix and appends
+// the valid results to eventAttrs. Record and WithAttrs attributes both go
+// through it, so they get the same keys, kinds and caps.
+func (h OtelHandler) appendEventAttrs(eventAttrs []attribute.KeyValue, attr slog.Attr) []attribute.KeyValue {
+	for _, otelAttr := range h.slogAttrToOtelAttr(attr, h.groupPrefix) {
+		if otelAttr.Valid() {
+			eventAttrs = append(eventAttrs, otelAttr)
+		}
+	}
+	return eventAttrs
 }
 
 // WithGroup returns a new Otel with a group, provided the group's name.
@@ -247,6 +274,7 @@ func (h OtelHandler) WithGroup(name string) slog.Handler {
 		NoTraceEvents: h.NoTraceEvents,
 		BaggageFilter: h.BaggageFilter,
 		groupPrefix:   joinKey(h.groupPrefix, name),
+		attrs:         h.attrs,
 	}
 }
 
