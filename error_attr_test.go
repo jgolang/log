@@ -3,7 +3,9 @@ package log
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -163,5 +165,69 @@ func TestReplaceAttrLeavesErrorsUnchanged(t *testing.T) {
 
 	if attr.Value.Kind() != slog.KindAny || attr.Value.Any() != coded {
 		t.Fatalf("expected ReplaceAttr to keep the error value, got %v", attr)
+	}
+}
+
+func TestLogValuerInChainStopsExpansion(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expanded bool
+	}{
+		{name: "LogValuer between wrapper and coded error", err: fmt.Errorf("ctx: %w", redactedError{err: newCodedError()})},
+		{name: "LogValuer below the coded error", err: errors.Wrap(redactedError{err: fmt.Errorf("inner")}), expanded: true},
+		{name: "joined, LogValuer branch first", err: stderrors.Join(redactedError{err: newCodedError()}, newCodedError())},
+		{name: "joined, plain branch then coded", err: stderrors.Join(fmt.Errorf("plain"), newCodedError()), expanded: true},
+		{name: "joined, coded branch then LogValuer", err: stderrors.Join(newCodedError(), redactedError{err: fmt.Errorf("x")}), expanded: true},
+	}
+	positions := []struct {
+		name string
+		log  func(*Logger, error)
+	}{
+		{name: "first argument", log: func(_ *Logger, err error) { Error(err) }},
+		{name: "attribute", log: func(l *Logger, err error) { l.Error("failed", "error", err) }},
+	}
+
+	for _, tt := range tests {
+		for _, position := range positions {
+			t.Run(tt.name+"/"+position.name, func(t *testing.T) {
+				buf := usePackageJSONHandler(t)
+				instance := New(WithJSONHandler(buf))
+
+				position.log(instance, tt.err)
+
+				_, isGroup := decodeRecord(t, buf)["error"].(map[string]any)
+				if isGroup != tt.expanded {
+					t.Fatalf("expanded = %v, want %v: %q", isGroup, tt.expanded, buf.String())
+				}
+			})
+		}
+	}
+}
+
+func TestLoggingDoesNotWriteIntoCallerSpareCapacity(t *testing.T) {
+	tests := []struct {
+		name string
+		args []any
+		log  func(*Logger, []any)
+	}{
+		{name: "instance", args: []any{"request_id", "abc"}, log: func(l *Logger, args []any) { l.Info("hello", args...) }},
+		{name: "package string message", args: []any{"hello", "request_id", "abc"}, log: func(_ *Logger, args []any) { Info(args...) }},
+		{name: "package error message", args: []any{fmt.Errorf("plain"), "request_id", "abc"}, log: func(_ *Logger, args []any) { Error(args...) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usePackageJSONHandler(t)
+			instance := New(WithJSONHandler(io.Discard))
+			backing := make([]any, len(tt.args), len(tt.args)+8)
+			copy(backing, tt.args)
+
+			tt.log(instance, backing)
+
+			if spare := backing[:cap(backing)][len(tt.args)]; spare != nil {
+				t.Fatalf("expected the caller's spare capacity untouched, got %v", spare)
+			}
+		})
 	}
 }

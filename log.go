@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 
 	"github.com/jgolang/log/internal/codederror"
 	"github.com/jgolang/log/logger"
@@ -85,7 +86,8 @@ func validateArgs(args ...any) (string, []any) {
 		rest = args[1:]
 	case error:
 		msg = v.Error()
-		rest = args[1:]
+		// Clip so append never writes into spare capacity of the caller's slice.
+		rest = slices.Clip(args[1:])
 		// The group has no text attribute: msg already carries v.Error().
 		if coded := codederror.Of(v); coded != nil {
 			rest = append(rest, codederror.Group("error", coded))

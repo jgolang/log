@@ -47,8 +47,10 @@
 // origin come from the first jgolang/errors error. Except for the first
 // argument, whose message already carries it, the group starts with text,
 // the full err.Error(). Any other error, and an attribute with an empty key,
-// is logged as is. An error that implements slog.LogValuer is never
-// expanded, so a type that must hide its wrapped detail implements it.
+// is logged as is. The chain is searched depth-first and the search stops at
+// an error that implements slog.LogValuer, so an error that is one, or wraps
+// one above its coded error, is never expanded: a type that must hide its
+// wrapped detail implements it.
 //
 // # Fatal
 //

@@ -3,23 +3,46 @@
 package codederror
 
 import (
-	stderrors "errors"
 	"log/slog"
 
 	"github.com/jgolang/errors"
 )
 
-// Of returns the first jgolang/errors error in err's chain, or nil. It also
-// returns nil when err implements slog.LogValuer: slog resolves that value
-// first, so an error that hides its wrapped detail keeps it hidden.
-// errors.AsType finds a coded error behind wrappers such as fmt.Errorf without
-// the allocation errors.As costs, which plain errors would otherwise pay.
+// Of returns the first jgolang/errors error in err's chain, or nil. It walks
+// the chain depth-first, as errors.As does, and returns nil when it meets an
+// error that implements slog.LogValuer before a coded one: slog logs that
+// value instead, so an error that hides what it wraps keeps it hidden, even
+// behind wrappers such as fmt.Errorf. The walk does not allocate.
 func Of(err error) *errors.Error {
-	if _, isLogValuer := err.(slog.LogValuer); isLogValuer {
-		return nil
-	}
-	coded, _ := stderrors.AsType[*errors.Error](err)
+	coded, _ := find(err)
 	return coded
+}
+
+// find reports, as found, whether the walk ended at a coded error or at a
+// slog.LogValuer; either one ends the walk across every branch.
+func find(err error) (coded *errors.Error, found bool) {
+	for err != nil {
+		if _, isLogValuer := err.(slog.LogValuer); isLogValuer {
+			return nil, true
+		}
+		if coded, isCoded := err.(*errors.Error); isCoded {
+			return coded, true
+		}
+		switch wrapper := err.(type) {
+		case interface{ Unwrap() error }:
+			err = wrapper.Unwrap()
+		case interface{ Unwrap() []error }:
+			for _, branch := range wrapper.Unwrap() {
+				if coded, found := find(branch); found {
+					return coded, true
+				}
+			}
+			return nil, false
+		default:
+			return nil, false
+		}
+	}
+	return nil, false
 }
 
 // Group builds the group, under key, for coded: code, msg, debug and origin.

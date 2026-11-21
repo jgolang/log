@@ -41,7 +41,7 @@ Any attribute whose value is an error with a `jgolang/errors` error anywhere in 
 {"level":"ERROR","msg":"failed","error":{"text":"loading board: [PLN-111](task not found): task 42 is missing","code":"PLN-111","msg":"task not found","debug":"task 42 is missing","origin":{"frame_0":"..."}},"source":{...}}
 ```
 
-The whole chain is searched. An error type that must keep its wrapped detail out of logs should implement `slog.LogValuer`: an error that does is never expanded, in any position, and slog logs its `LogValue` instead.
+The whole chain is searched, depth-first as `errors.As` does, and the search stops at the first error that implements `slog.LogValuer`. An error type that must keep its wrapped detail out of logs should implement it: an error that is a `LogValuer`, or wraps one above its coded error (`fmt.Errorf("ctx: %w", redacting)`), is never expanded, in any position, and slog logs the value as usual.
 
 ## Configuration
 

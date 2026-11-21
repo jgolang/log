@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"sync"
 )
 
@@ -195,7 +196,9 @@ func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args []a
 	if cfg.logger == nil || !cfg.logger.Enabled(ctx, level) {
 		return
 	}
-	args = expandCodedErrors(args)
+	// Clip so appends never write into spare capacity of the caller's slice;
+	// a copy made by expandCodedErrors is ours to extend.
+	args = expandCodedErrors(slices.Clip(args))
 	if cfg.addSource {
 		withStack := level == slog.LevelDebug && cfg.debugStack
 		depth := 1
