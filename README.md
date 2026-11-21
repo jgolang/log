@@ -145,6 +145,8 @@ sanitized. Baggage can contain tenant identifiers, tokens, or other sensitive
 values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
 `WithBaggageFilter` to keep log output intentional.
 
+From `log/otel` v1.9.0 baggage members are logged under a `baggage` group (`"baggage":{"request_id":"r1"}` in JSON, `baggage.request_id` on span events), so a member key chosen by the caller, such as `msg` or `level`, cannot replace a record key. Earlier versions added them as top-level attributes.
+
 ## Verification
 
 ```bash

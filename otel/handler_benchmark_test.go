@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -28,6 +29,20 @@ func BenchmarkHandleSpanEvent(b *testing.B) {
 				l.logger.InfoContext(ctx, "order created", "order_id", 42, "status", "ok")
 			}
 		})
+	}
+}
+
+// BenchmarkHandleBaggage measures a record written with baggage logging on.
+func BenchmarkHandleBaggage(b *testing.B) {
+	logger := slog.New(New(slog.NewJSONHandler(io.Discard, nil), WithNoBaggage(false)))
+	bag, err := baggage.Parse("request_id=r-123,tenant=acme")
+	if err != nil {
+		b.Fatalf("baggage.Parse() error = %v", err)
+	}
+	ctx := baggage.ContextWithBaggage(context.Background(), bag)
+	b.ReportAllocs()
+	for b.Loop() {
+		logger.InfoContext(ctx, "order created", "order_id", 42)
 	}
 }
 
