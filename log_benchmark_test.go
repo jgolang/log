@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,8 @@ import (
 )
 
 func BenchmarkLoggerInfo(b *testing.B) {
+	coded := errors.NewC(codes.AppValidation, "invalid value")
+	plain := stderrors.New("invalid value")
 	tests := []struct {
 		name       string
 		addSource  bool
@@ -42,6 +45,22 @@ func BenchmarkLoggerInfo(b *testing.B) {
 			level:      slog.LevelDebug,
 			log: func(logger *Logger) {
 				logger.Debug("hello", "request_id", "abc")
+			},
+		},
+		{
+			name:      "plain_error_attr",
+			addSource: true,
+			level:     slog.LevelInfo,
+			log: func(logger *Logger) {
+				logger.Error("failed", "error", plain)
+			},
+		},
+		{
+			name:      "coded_error_attr",
+			addSource: true,
+			level:     slog.LevelInfo,
+			log: func(logger *Logger) {
+				logger.Error("failed", "error", coded)
 			},
 		},
 		{
@@ -99,6 +118,8 @@ func BenchmarkPackageLevel(b *testing.B) {
 		name string
 		log  func()
 	}{
+		{name: "enabled_string", log: func() { Info("hello", "request_id", "abc") }},
+		{name: "enabled_coded_error", log: func() { Error(coded, "request_id", "abc") }},
 		{name: "disabled_string", log: func() { Debug("hello", "request_id", "abc") }},
 		{name: "disabled_coded_error", log: func() { Debug(coded, "request_id", "abc") }},
 		{name: "disabled_coded_error_context", log: func() { DebugC(context.Background(), coded, "request_id", "abc") }},

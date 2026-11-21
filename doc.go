@@ -36,11 +36,15 @@
 //
 // The first argument is the message; the rest are key-value attributes. A
 // string is used as is. An error becomes the message and also adds an "error"
-// attribute: for a jgolang/errors error anywhere in its chain (also behind
-// fmt.Errorf) it is a group with code, msg, debug and origin (code and msg come
-// from the first non-nil code in the chain and are left out when there is
-// none; debug and origin come from the first jgolang/errors error); for any other error it is the error
-// itself. Any other value is printed with fmt.Sprint.
+// attribute holding the error. Any other value is printed with fmt.Sprint.
+//
+// Any attribute whose value is an error with a jgolang/errors error anywhere
+// in its chain (also behind fmt.Errorf) is logged as a group under its own
+// key, with code, msg, debug and origin, for the package helpers and the
+// Logger methods alike, also inside groups. code and msg come from the first
+// non-nil code in the chain and are left out when there is none; debug and
+// origin come from the first jgolang/errors error. Any other error is logged
+// as its message.
 //
 // # Fatal
 //

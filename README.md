@@ -33,7 +33,13 @@ func main(){
 {"time":"2026-05-02T10:00:00Z","level":"INFO","msg":"My info....","source":{"func":"main","file":"main.go","line":6}}
 ```
 
-The first argument is the message; the rest are key-value attributes. A string is used as is. An error becomes the message and also adds an `error` attribute: for a `jgolang/errors` error anywhere in its chain (also behind `fmt.Errorf`) it is a group with `code`, `msg`, `debug` and `origin` (`code` and `msg` come from the first non-nil code in the chain, also below an error whose code is nil, and are left out when the chain has no code; `debug` and `origin` come from the first `jgolang/errors` error); for any other error it is the error itself. Any other value is printed with `fmt.Sprint`, so `log.Info(42, "request_id", id)` logs the message `42`.
+The first argument is the message; the rest are key-value attributes. A string is used as is. An error becomes the message and also adds an `error` attribute holding the error. Any other value is printed with `fmt.Sprint`, so `log.Info(42, "request_id", id)` logs the message `42`.
+
+Any attribute whose value is an error with a `jgolang/errors` error anywhere in its chain (also behind `fmt.Errorf`) is logged as a group under its own key, with `code`, `msg`, `debug` and `origin`. This applies to the first-argument `error` attribute, to later attributes (`log.Info("msg", "err", err)`), to the instance API (`logger.Error("failed", "error", err)`) and to attributes inside groups. `code` and `msg` come from the first non-nil code in the chain, also below an error whose code is nil, and are left out when the chain has no code; `debug` and `origin` come from the first `jgolang/errors` error. Any other error is logged as its message:
+
+```terminal
+{"level":"ERROR","msg":"failed","error":{"code":"PLN-111","msg":"task not found","debug":"task 42 is missing","origin":{"frame_0":"..."}},"source":{...}}
+```
 
 ## Configuration
 
