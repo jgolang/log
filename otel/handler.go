@@ -11,8 +11,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
@@ -32,6 +35,17 @@ const (
 	SpanEventKey = "log"
 )
 
+const (
+	// maxAttributeValueLen caps, in bytes, every string the handler writes to
+	// a span: event attribute values (including each []string element), the
+	// event message and the error status description. Longer strings are cut
+	// on a UTF-8 boundary and end with truncationMarker, so a capped value is
+	// at most maxAttributeValueLen+len(truncationMarker) bytes. The next
+	// handler still receives the full record.
+	maxAttributeValueLen = 1024
+	truncationMarker     = "…"
+)
+
 // OtelHandler is an implementation of slog's Handler interface.
 // Its role is to ensure correlation between logs and OTel spans
 // by:
@@ -41,6 +55,12 @@ const (
 // 3. Setting slog record as otel span event.
 // 4. Adding slog record attributes to the otel span event.
 // 5. Setting span status based on slog record level (only if >= slog.LevelError).
+//
+// Span event attribute keys are the slog group path joined with ".", handler
+// groups (WithGroup) first, e.g. "req.error.origin". slog.Duration values are
+// recorded as int64 nanoseconds; slog.Uint64 values as int64, or as a decimal
+// string when they exceed math.MaxInt64. String values longer than 1 KiB are
+// truncated and end with "…".
 type OtelHandler struct {
 	// Next represents the next handler in the chain.
 	Next slog.Handler
@@ -50,6 +70,9 @@ type OtelHandler struct {
 	NoTraceEvents bool
 	// BaggageFilter can allow, drop, or redact baggage members before they are logged.
 	BaggageFilter BaggageFilter
+
+	// groupPrefix is the dot-joined path of the groups opened with WithGroup.
+	groupPrefix string
 }
 
 type OtelHandlerOpt func(handler *OtelHandler)
@@ -156,11 +179,11 @@ func (h OtelHandler) Handle(ctx context.Context, record slog.Record) error {
 	if !h.NoTraceEvents {
 		// Adding log info to span event.
 		eventAttrs := make([]attribute.KeyValue, 0, record.NumAttrs())
-		eventAttrs = append(eventAttrs, attribute.String(slog.MessageKey, record.Message))
+		eventAttrs = append(eventAttrs, attribute.String(slog.MessageKey, capString(record.Message)))
 		eventAttrs = append(eventAttrs, attribute.String(slog.LevelKey, record.Level.String()))
 		eventAttrs = append(eventAttrs, attribute.String(slog.TimeKey, record.Time.Format(time.RFC3339Nano)))
 		record.Attrs(func(attr slog.Attr) bool {
-			otelAttrs := h.slogAttrToOtelAttr(attr)
+			otelAttrs := h.slogAttrToOtelAttr(attr, h.groupPrefix)
 			for _, otelAttr := range otelAttrs {
 				if otelAttr.Valid() {
 					eventAttrs = append(eventAttrs, otelAttr)
@@ -188,7 +211,7 @@ func (h OtelHandler) Handle(ctx context.Context, record slog.Record) error {
 	// Setting span status if the log is an error.
 	// Purposely leaving as codes.Unset (default) otherwise.
 	if record.Level >= slog.LevelError {
-		span.SetStatus(codes.Error, record.Message)
+		span.SetStatus(codes.Error, capString(record.Message))
 	}
 
 	return h.Next.Handle(ctx, record)
@@ -201,16 +224,21 @@ func (h OtelHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		NoBaggage:     h.NoBaggage,
 		NoTraceEvents: h.NoTraceEvents,
 		BaggageFilter: h.BaggageFilter,
+		groupPrefix:   h.groupPrefix,
 	}
 }
 
 // WithGroup returns a new Otel with a group, provided the group's name.
 func (h OtelHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
 	return OtelHandler{
 		Next:          h.Next.WithGroup(name),
 		NoBaggage:     h.NoBaggage,
 		NoTraceEvents: h.NoTraceEvents,
 		BaggageFilter: h.BaggageFilter,
+		groupPrefix:   joinKey(h.groupPrefix, name),
 	}
 }
 
@@ -220,50 +248,54 @@ func (h OtelHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.Next.Enabled(ctx, level)
 }
 
-// slogAttrToOtelAttr converts a slog attribute to an OTel one.
-// Note: returns an empty attribute if the provided slog attribute is empty.
-func (h OtelHandler) slogAttrToOtelAttr(attr slog.Attr, groupKeys ...string) []attribute.KeyValue {
+// slogAttrToOtelAttr converts a slog attribute to OTel ones, prefixing its key
+// with the dot-joined group path in prefix.
+// Note: returns no attributes if the provided slog attribute is empty.
+func (h OtelHandler) slogAttrToOtelAttr(attr slog.Attr, prefix string) []attribute.KeyValue {
 	attr.Value = attr.Value.Resolve()
 	if attr.Equal(slog.Attr{}) {
 		return []attribute.KeyValue{}
 	}
 
-	key := func(k string, prefixes ...string) string {
-		for _, prefix := range prefixes {
-			k = fmt.Sprintf("%s.%s", prefix, k)
+	value := attr.Value
+	if value.Kind() == slog.KindGroup {
+		// A group with an empty key is inlined, as slog handlers do.
+		groupPrefix := prefix
+		if attr.Key != "" {
+			groupPrefix = joinKey(prefix, attr.Key)
 		}
+		var attrs []attribute.KeyValue
+		for _, groupAttr := range value.Group() {
+			attrs = append(attrs, h.slogAttrToOtelAttr(groupAttr, groupPrefix)...)
+		}
+		return attrs
+	}
 
-		return k
-	}(attr.Key, groupKeys...)
-
-	value := attr.Value.Resolve()
-
-	switch attr.Value.Kind() {
+	key := joinKey(prefix, attr.Key)
+	switch value.Kind() {
 	case slog.KindBool:
 		return []attribute.KeyValue{attribute.Bool(key, value.Bool())}
 	case slog.KindFloat64:
 		return []attribute.KeyValue{attribute.Float64(key, value.Float64())}
 	case slog.KindInt64:
 		return []attribute.KeyValue{attribute.Int64(key, value.Int64())}
+	case slog.KindUint64:
+		u := value.Uint64()
+		if u <= math.MaxInt64 {
+			return []attribute.KeyValue{attribute.Int64(key, int64(u))}
+		}
+		return []attribute.KeyValue{attribute.String(key, strconv.FormatUint(u, 10))}
+	case slog.KindDuration:
+		// Nanoseconds, as slog's JSON handler writes durations.
+		return []attribute.KeyValue{attribute.Int64(key, int64(value.Duration()))}
 	case slog.KindString:
-		return []attribute.KeyValue{attribute.String(key, value.String())}
+		return []attribute.KeyValue{attribute.String(key, capString(value.String()))}
 	case slog.KindTime:
 		return []attribute.KeyValue{attribute.String(key, value.Time().Format(time.RFC3339Nano))}
-	case slog.KindGroup:
-		groupAttrs := value.Group()
-		if len(groupAttrs) == 0 {
-			return nil
-		}
-		var attrs []attribute.KeyValue
-		for _, groupAttr := range groupAttrs {
-			childAttr := h.slogAttrToOtelAttr(groupAttr, append(groupKeys, key)...)
-			attrs = append(attrs, childAttr...)
-		}
-		return attrs
 	case slog.KindAny:
-		switch v := attr.Value.Any().(type) {
+		switch v := value.Any().(type) {
 		case []string:
-			return []attribute.KeyValue{attribute.StringSlice(key, v)}
+			return []attribute.KeyValue{attribute.StringSlice(key, capStrings(v))}
 		case []int:
 			return []attribute.KeyValue{attribute.IntSlice(key, v)}
 		case []int64:
@@ -273,11 +305,48 @@ func (h OtelHandler) slogAttrToOtelAttr(attr slog.Attr, groupKeys ...string) []a
 		case []bool:
 			return []attribute.KeyValue{attribute.BoolSlice(key, v)}
 		case error:
-			return []attribute.KeyValue{attribute.String(key, fmt.Sprintf("ERROR: %+v", v))}
+			return []attribute.KeyValue{attribute.String(key, capString(fmt.Sprintf("ERROR: %+v", v)))}
 		default:
-			return []attribute.KeyValue{attribute.String(key, fmt.Sprintf("%+v", v))}
+			return []attribute.KeyValue{attribute.String(key, capString(fmt.Sprintf("%+v", v)))}
 		}
 	default:
 		return []attribute.KeyValue{}
 	}
+}
+
+// joinKey appends key to the dot-joined group path in prefix.
+func joinKey(prefix, key string) string {
+	if prefix == "" {
+		return key
+	}
+	return prefix + "." + key
+}
+
+// capString truncates s to maxAttributeValueLen bytes on a UTF-8 boundary and
+// appends truncationMarker when it was longer.
+func capString(s string) string {
+	if len(s) <= maxAttributeValueLen {
+		return s
+	}
+	cut := maxAttributeValueLen
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + truncationMarker
+}
+
+// capStrings applies capString to every element, copying values only when one
+// needs truncation so the caller's slice is never modified.
+func capStrings(values []string) []string {
+	for i, value := range values {
+		if len(value) > maxAttributeValueLen {
+			capped := make([]string, len(values))
+			copy(capped, values)
+			for j := i; j < len(capped); j++ {
+				capped[j] = capString(capped[j])
+			}
+			return capped
+		}
+	}
+	return values
 }

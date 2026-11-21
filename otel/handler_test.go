@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
@@ -232,4 +235,166 @@ func attrValue(attrs []attribute.KeyValue, key string) string {
 		}
 	}
 	return ""
+}
+
+func newSpanLogger(t *testing.T) (*slog.Logger, context.Context, *recordingSpan) {
+	t.Helper()
+	span := &recordingSpan{}
+	ctx := trace.ContextWithSpan(context.Background(), span)
+	logger := slog.New(New(slog.NewJSONHandler(&bytes.Buffer{}, nil)))
+	return logger, ctx, span
+}
+
+func eventAttr(t *testing.T, span *recordingSpan, key string) attribute.Value {
+	t.Helper()
+	if len(span.events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(span.events))
+	}
+	for _, attr := range span.events[0].attrs {
+		if string(attr.Key) == key {
+			return attr.Value
+		}
+	}
+	t.Fatalf("event attribute %q not found in %v", key, span.events[0].attrs)
+	return attribute.Value{}
+}
+
+func TestSpanEventAttributeKinds(t *testing.T) {
+	when := time.Date(2026, 1, 2, 3, 4, 5, 6, time.UTC)
+	tests := []struct {
+		name string
+		attr slog.Attr
+		want attribute.Value
+	}{
+		{"string", slog.String("k", "v"), attribute.StringValue("v")},
+		{"bool", slog.Bool("k", true), attribute.BoolValue(true)},
+		{"int64", slog.Int64("k", -7), attribute.Int64Value(-7)},
+		{"float64", slog.Float64("k", 1.5), attribute.Float64Value(1.5)},
+		{"time", slog.Time("k", when), attribute.StringValue(when.Format(time.RFC3339Nano))},
+		{"duration as int64 nanoseconds", slog.Duration("k", 1500*time.Millisecond), attribute.Int64Value(1_500_000_000)},
+		{"uint64 that fits int64", slog.Uint64("k", 42), attribute.Int64Value(42)},
+		{"uint64 max int64", slog.Uint64("k", math.MaxInt64), attribute.Int64Value(math.MaxInt64)},
+		{"uint64 above int64 as string", slog.Uint64("k", math.MaxUint64), attribute.StringValue("18446744073709551615")},
+		{"string slice", slog.Any("k", []string{"a", "b"}), attribute.StringSliceValue([]string{"a", "b"})},
+		{"error", slog.Any("k", errors.New("boom")), attribute.StringValue("ERROR: boom")},
+		{"any", slog.Any("k", struct{ A int }{1}), attribute.StringValue("{A:1}")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx, span := newSpanLogger(t)
+
+			logger.LogAttrs(ctx, slog.LevelInfo, "msg", tt.attr)
+
+			if got := eventAttr(t, span, "k"); got != tt.want {
+				t.Fatalf("value = %v (%v), want %v (%v)", got.Emit(), got.Type(), tt.want.Emit(), tt.want.Type())
+			}
+		})
+	}
+}
+
+func TestSpanEventNestedGroupKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		logger  func(*slog.Logger) *slog.Logger
+		attr    slog.Attr
+		wantKey string
+	}{
+		{
+			name:    "two level attr group",
+			logger:  func(l *slog.Logger) *slog.Logger { return l },
+			attr:    slog.Group("error", slog.Group("origin", slog.String("frame_0", "v"))),
+			wantKey: "error.origin.frame_0",
+		},
+		{
+			name:    "three level attr group keeps order",
+			logger:  func(l *slog.Logger) *slog.Logger { return l },
+			attr:    slog.Group("a", slog.Group("b", slog.Group("c", slog.String("d", "v")))),
+			wantKey: "a.b.c.d",
+		},
+		{
+			name:    "inline group with empty key adds no prefix",
+			logger:  func(l *slog.Logger) *slog.Logger { return l },
+			attr:    slog.Group("", slog.String("k", "v")),
+			wantKey: "k",
+		},
+		{
+			name:    "handler groups prefix record attrs",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.WithGroup("req").WithGroup("http") },
+			attr:    slog.String("k", "v"),
+			wantKey: "req.http.k",
+		},
+		{
+			name:    "handler groups and attr groups combine in order",
+			logger:  func(l *slog.Logger) *slog.Logger { return l.WithGroup("req").With("x", 1).WithGroup("http") },
+			attr:    slog.Group("h", slog.Group("i", slog.String("k", "v"))),
+			wantKey: "req.http.h.i.k",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx, span := newSpanLogger(t)
+
+			tt.logger(logger).LogAttrs(ctx, slog.LevelInfo, "msg", tt.attr)
+
+			if got := eventAttr(t, span, tt.wantKey); got.AsString() != "v" {
+				t.Fatalf("%s = %q, want v", tt.wantKey, got.AsString())
+			}
+		})
+	}
+}
+
+func TestSpanEventValuesAreCapped(t *testing.T) {
+	long := strings.Repeat("x", 100*1024)
+	wantCapped := strings.Repeat("x", maxAttributeValueLen) + truncationMarker
+	tests := []struct {
+		name string
+		attr slog.Attr
+		want string
+	}{
+		{"short string unchanged", slog.String("k", "short"), "short"},
+		{"exactly at cap unchanged", slog.String("k", long[:maxAttributeValueLen]), long[:maxAttributeValueLen]},
+		{"long string", slog.String("k", long), wantCapped},
+		{"long any", slog.Any("k", struct{ S string }{long}), "{S:" + long[:maxAttributeValueLen-3] + truncationMarker},
+		{"long error", slog.Any("k", errors.New(long)), "ERROR: " + long[:maxAttributeValueLen-7] + truncationMarker},
+		{"cut on a rune boundary", slog.String("k", "a"+strings.Repeat("é", maxAttributeValueLen)), "a" + strings.Repeat("é", (maxAttributeValueLen-1)/2) + truncationMarker},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx, span := newSpanLogger(t)
+
+			logger.LogAttrs(ctx, slog.LevelInfo, "msg", tt.attr)
+
+			if got := eventAttr(t, span, "k").AsString(); got != tt.want {
+				t.Fatalf("value len = %d, want len %d", len(got), len(tt.want))
+			}
+		})
+	}
+}
+
+func TestSpanEventStringSliceElementsAreCapped(t *testing.T) {
+	logger, ctx, span := newSpanLogger(t)
+	long := strings.Repeat("x", 2*maxAttributeValueLen)
+
+	logger.InfoContext(ctx, "msg", slog.Any("k", []string{"a", long}))
+
+	got := eventAttr(t, span, "k").AsStringSlice()
+	want := []string{"a", long[:maxAttributeValueLen] + truncationMarker}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("slice lens = %d, want capped elements", len(got))
+	}
+}
+
+func TestSpanEventMessageAndStatusAreCapped(t *testing.T) {
+	logger, ctx, span := newSpanLogger(t)
+	long := strings.Repeat("x", 2*maxAttributeValueLen)
+	want := long[:maxAttributeValueLen] + truncationMarker
+
+	logger.ErrorContext(ctx, long)
+
+	if got := eventAttr(t, span, slog.MessageKey).AsString(); got != want {
+		t.Fatalf("event message len = %d, want %d", len(got), len(want))
+	}
+	if span.statusDescription != want {
+		t.Fatalf("status description len = %d, want %d", len(span.statusDescription), len(want))
+	}
 }
