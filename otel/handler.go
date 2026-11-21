@@ -49,6 +49,13 @@ const (
 	// handler still receives the full record.
 	maxAttributeValueLen = 1024
 	truncationMarker     = "…"
+	// maxAttributeSliceLen caps the element count of every slice attribute
+	// value ([]string, []int, []int64, []float64, []bool) the handler writes
+	// to a span event; later elements are dropped. 128 is the same value as
+	// the OpenTelemetry SDK's default per-event attribute count limit, which
+	// counts attributes, not slice elements. []string elements are also
+	// capped by maxAttributeValueLen.
+	maxAttributeSliceLen = 128
 )
 
 // OtelHandler is an implementation of slog's Handler interface.
@@ -65,10 +72,11 @@ const (
 // groups (WithGroup) first, e.g. "req.error.origin". slog.Duration values are
 // recorded as int64 nanoseconds; slog.Uint64 values as int64, or as a decimal
 // string when they exceed math.MaxInt64. String values longer than 1 KiB are
-// truncated and end with "…". Attributes added with WithAttrs (logger.With)
-// are recorded on every span event the derived handler adds, before the
-// record's own attributes, with the same keys, kinds and caps; they are
-// converted once, when WithAttrs is called.
+// truncated and end with "…"; slice values ([]string, []int, []int64,
+// []float64, []bool) keep their first 128 elements. Attributes added with
+// WithAttrs (logger.With) are recorded on every span event the derived handler
+// adds, before the record's own attributes, with the same keys, kinds and
+// caps; they are converted once, when WithAttrs is called.
 type OtelHandler struct {
 	// Next represents the next handler in the chain.
 	Next slog.Handler
@@ -331,15 +339,15 @@ func (h OtelHandler) slogAttrToOtelAttr(attr slog.Attr, prefix string) []attribu
 	case slog.KindAny:
 		switch v := value.Any().(type) {
 		case []string:
-			return []attribute.KeyValue{attribute.StringSlice(key, capStrings(v))}
+			return []attribute.KeyValue{attribute.StringSlice(key, capStrings(capSlice(v)))}
 		case []int:
-			return []attribute.KeyValue{attribute.IntSlice(key, v)}
+			return []attribute.KeyValue{attribute.IntSlice(key, capSlice(v))}
 		case []int64:
-			return []attribute.KeyValue{attribute.Int64Slice(key, v)}
+			return []attribute.KeyValue{attribute.Int64Slice(key, capSlice(v))}
 		case []float64:
-			return []attribute.KeyValue{attribute.Float64Slice(key, v)}
+			return []attribute.KeyValue{attribute.Float64Slice(key, capSlice(v))}
 		case []bool:
-			return []attribute.KeyValue{attribute.BoolSlice(key, v)}
+			return []attribute.KeyValue{attribute.BoolSlice(key, capSlice(v))}
 		case error:
 			return []attribute.KeyValue{attribute.String(key, capString(fmt.Sprintf("ERROR: %+v", v)))}
 		default:
@@ -374,6 +382,15 @@ func capString(s string) string {
 		cut = maxAttributeValueLen
 	}
 	return s[:cut] + truncationMarker
+}
+
+// capSlice returns the first maxAttributeSliceLen elements of values. It
+// reslices without copying; the attribute constructors copy the elements.
+func capSlice[T any](values []T) []T {
+	if len(values) <= maxAttributeSliceLen {
+		return values
+	}
+	return values[:maxAttributeSliceLen]
 }
 
 // capStrings applies capString to every element, copying values only when one

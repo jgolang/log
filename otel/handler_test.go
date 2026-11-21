@@ -7,6 +7,9 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -381,6 +384,90 @@ func TestSpanEventStringSliceElementsAreCapped(t *testing.T) {
 	want := []string{"a", long[:maxAttributeValueLen] + truncationMarker}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("slice lens = %d, want capped elements", len(got))
+	}
+}
+
+func TestSpanEventSliceLengthIsCapped(t *testing.T) {
+	const huge = 100_000
+	ints := sequence(huge, func(i int) int { return i })
+	int64s := sequence(huge, func(i int) int64 { return int64(i) })
+	float64s := sequence(huge, func(i int) float64 { return float64(i) })
+	bools := sequence(huge, func(i int) bool { return i%3 == 0 })
+	strs := sequence(huge, strconv.Itoa)
+	tests := []struct {
+		name  string
+		value func() any // a fresh copy, to check the logged slice is not modified
+		want  attribute.Value
+	}{
+		{"[]int", func() any { return slices.Clone(ints) }, attribute.IntSliceValue(ints[:maxAttributeSliceLen])},
+		{"[]int64", func() any { return slices.Clone(int64s) }, attribute.Int64SliceValue(int64s[:maxAttributeSliceLen])},
+		{"[]float64", func() any { return slices.Clone(float64s) }, attribute.Float64SliceValue(float64s[:maxAttributeSliceLen])},
+		{"[]bool", func() any { return slices.Clone(bools) }, attribute.BoolSliceValue(bools[:maxAttributeSliceLen])},
+		{"[]string", func() any { return slices.Clone(strs) }, attribute.StringSliceValue(strs[:maxAttributeSliceLen])},
+		{"exactly at cap unchanged", func() any { return slices.Clone(ints[:maxAttributeSliceLen]) }, attribute.IntSliceValue(ints[:maxAttributeSliceLen])},
+		{"short slice unchanged", func() any { return []int{1, 2, 3} }, attribute.IntSliceValue([]int{1, 2, 3})},
+	}
+	sources := []struct {
+		name  string
+		write func(l *slog.Logger, ctx context.Context, value any)
+	}{
+		{"record attr", func(l *slog.Logger, ctx context.Context, value any) {
+			l.InfoContext(ctx, "msg", slog.Any("k", value))
+		}},
+		{"With attr", func(l *slog.Logger, ctx context.Context, value any) {
+			l.With(slog.Any("k", value)).InfoContext(ctx, "msg")
+		}},
+	}
+	for _, tt := range tests {
+		for _, source := range sources {
+			t.Run(tt.name+" "+source.name, func(t *testing.T) {
+				logger, ctx, span := newSpanLogger(t)
+				value := tt.value()
+
+				source.write(logger, ctx, value)
+
+				if got := eventAttr(t, span, "k"); got != tt.want {
+					t.Fatalf("value = %.80s, want its first elements %.80s", got.Emit(), tt.want.Emit())
+				}
+				if !reflect.DeepEqual(value, tt.value()) {
+					t.Fatal("the caller's slice was modified")
+				}
+			})
+		}
+	}
+}
+
+// sequence returns n elements built from their index.
+func sequence[T any](n int, element func(int) T) []T {
+	values := make([]T, n)
+	for i := range values {
+		values[i] = element(i)
+	}
+	return values
+}
+
+func TestSpanEventStringSliceIsCappedInLengthAndElements(t *testing.T) {
+	logger, ctx, span := newSpanLogger(t)
+	long := strings.Repeat("x", 2*maxAttributeValueLen)
+	values := make([]string, 2*maxAttributeSliceLen)
+	for i := range values {
+		values[i] = long
+	}
+
+	logger.InfoContext(ctx, "msg", slog.Any("k", values))
+
+	got := eventAttr(t, span, "k").AsStringSlice()
+	if len(got) != maxAttributeSliceLen {
+		t.Fatalf("slice len = %d, want %d", len(got), maxAttributeSliceLen)
+	}
+	want := long[:maxAttributeValueLen] + truncationMarker
+	for i, value := range got {
+		if value != want {
+			t.Fatalf("element %d len = %d, want %d", i, len(value), len(want))
+		}
+	}
+	if len(values) != 2*maxAttributeSliceLen || values[0] != long {
+		t.Fatal("the caller's slice was modified")
 	}
 }
 
