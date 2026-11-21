@@ -101,10 +101,10 @@ logger.Info("service started")
 Upgrading from `log` v1.4.x or earlier, where `otel` was part of the root module, raise both together:
 
 ```sh
-go get github.com/jgolang/log@v1.5.0 github.com/jgolang/log/otel@v1.5.0
+go get github.com/jgolang/log@v1.6.0 github.com/jgolang/log/otel@v1.6.0
 ```
 
-Raising only `log` makes Go report that no required module provides `github.com/jgolang/log/otel`; `log/otel` v1.5.0 requires `log` v1.5.0, so adding it raises `log` too. New users run `go get github.com/jgolang/log/otel`.
+Raising only `log` makes Go report that no required module provides `github.com/jgolang/log/otel`; `log/otel` v1.5.0 and later require `log` v1.5.0 or later, so adding it raises `log` too. New users run `go get github.com/jgolang/log@v1.6.0 github.com/jgolang/log/otel@v1.6.0`. `SetHandlerWrapper` and `WithHandlerWrapper`, used below, need `log` v1.6.0.
 
 Wrap the logger's handler with `otel.NewOtelHandler` so records logged with a context carry its `trace_id` and `span_id` and are added to the span as events:
 

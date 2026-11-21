@@ -3,9 +3,11 @@ package log
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jgolang/log/logger"
 )
@@ -132,4 +134,85 @@ func TestSetHandlerWrapperWrapsPackageLogger(t *testing.T) {
 		t.Fatalf("expected the wrapper to tag the record, got %v", record)
 	}
 	assertSource(t, record, site)
+}
+
+func TestHandlerWrapperFactoryCanLogThroughSameLogger(t *testing.T) {
+	tests := []struct {
+		name    string
+		rebuild func(instance *Logger, wrap func(slog.Handler) slog.Handler)
+	}{
+		{name: "SetHandlerWrapper", rebuild: func(instance *Logger, wrap func(slog.Handler) slog.Handler) {
+			instance.SetHandlerWrapper(wrap)
+		}},
+		{name: "SetTextHandler after the wrapper", rebuild: func(instance *Logger, wrap func(slog.Handler) slog.Handler) {
+			instance.SetHandlerWrapper(wrap)
+			instance.SetTextHandler(io.Discard)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			instance := New(WithJSONHandler(&buf))
+			wrap := func(next slog.Handler) slog.Handler {
+				instance.Info("building wrapper")
+				return next
+			}
+			done := make(chan struct{})
+
+			go func() {
+				defer close(done)
+				tt.rebuild(instance, wrap)
+			}()
+
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("rebuilding the handler deadlocked when the wrapper logged through the same logger")
+			}
+			if !strings.Contains(buf.String(), "building wrapper") {
+				t.Fatalf("expected the wrapper's record, got %q", buf.String())
+			}
+		})
+	}
+}
+
+func TestPanickingHandlerWrapperIsNotKept(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(WithJSONHandler(io.Discard))
+	func() {
+		defer func() { _ = recover() }()
+		instance.SetHandlerWrapper(func(slog.Handler) slog.Handler { panic("broken wrapper") })
+	}()
+
+	instance.SetJSONHandler(&buf)
+	instance.Info("hello")
+
+	if !strings.Contains(buf.String(), `"msg":"hello"`) {
+		t.Fatalf("expected the new handler to write unwrapped, got %q", buf.String())
+	}
+}
+
+func TestSetHandlerWrapperOnZeroValueLoggerDoesNotPanic(t *testing.T) {
+	wrap, handled := newTaggingWrapper()
+	tests := []struct {
+		name string
+		wrap func(slog.Handler) slog.Handler
+	}{
+		{name: "nil wrapper", wrap: nil},
+		{name: "wrapper", wrap: wrap},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var zero Logger
+
+			zero.SetHandlerWrapper(tt.wrap)
+			zero.Info("dropped")
+
+			if *handled != 0 {
+				t.Fatalf("expected no handler to run without a built handler, got %d records", *handled)
+			}
+		})
+	}
 }
