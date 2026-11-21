@@ -280,7 +280,7 @@ func TestSpanEventAttributeKinds(t *testing.T) {
 		{"uint64 above int64 as string", slog.Uint64("k", math.MaxUint64), attribute.StringValue("18446744073709551615")},
 		{"string slice", slog.Any("k", []string{"a", "b"}), attribute.StringSliceValue([]string{"a", "b"})},
 		{"error", slog.Any("k", errors.New("boom")), attribute.StringValue("ERROR: boom")},
-		{"any", slog.Any("k", struct{ A int }{1}), attribute.StringValue("{A:1}")},
+		{"any as JSON", slog.Any("k", struct{ A int }{1}), attribute.StringValue(`{"A":1}`)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -357,7 +357,7 @@ func TestSpanEventValuesAreCapped(t *testing.T) {
 		{"short string unchanged", slog.String("k", "short"), "short"},
 		{"exactly at cap unchanged", slog.String("k", long[:maxAttributeValueLen]), long[:maxAttributeValueLen]},
 		{"long string", slog.String("k", long), wantCapped},
-		{"long any", slog.Any("k", struct{ S string }{long}), "{S:" + long[:maxAttributeValueLen-3] + truncationMarker},
+		{"long any", slog.Any("k", struct{ S string }{long}), `{"S":"` + long[:maxAttributeValueLen-6] + truncationMarker},
 		{"long error", slog.Any("k", errors.New(long)), "ERROR: " + long[:maxAttributeValueLen-7] + truncationMarker},
 		{"cut on a rune boundary", slog.String("k", "a"+strings.Repeat("é", maxAttributeValueLen)), "a" + strings.Repeat("é", (maxAttributeValueLen-1)/2) + truncationMarker},
 	}
@@ -636,4 +636,86 @@ func hasAttr(attrs []attribute.KeyValue, key string) bool {
 		}
 	}
 	return false
+}
+
+type loginRequest struct {
+	User     string
+	Password string `json:"-"`
+}
+
+type redactingJSON string
+
+func (redactingJSON) MarshalJSON() ([]byte, error) { return []byte(`"[REDACTED]"`), nil }
+
+type redactingText string
+
+func (redactingText) MarshalText() ([]byte, error) { return []byte("[REDACTED]"), nil }
+
+type leakyStringer struct {
+	Updates  chan int
+	password string
+}
+
+func (s leakyStringer) String() string { return s.password }
+
+type valueMarshaler struct{}
+
+func (valueMarshaler) MarshalJSON() ([]byte, error) { return []byte(`"[REDACTED]"`), nil }
+
+type nilUnsafeError struct{ message string }
+
+func (e *nilUnsafeError) Error() string { return e.message }
+
+type panickingText struct{}
+
+func (panickingText) MarshalText() ([]byte, error) { panic("boom") }
+
+func TestSpanEventValuesFollowLogRedaction(t *testing.T) {
+	var typedNil *nilUnsafeError
+	tests := []struct {
+		name string
+		attr slog.Attr
+		want string
+	}{
+		{"json dash field", slog.Any("k", loginRequest{User: "bob", Password: "hunter2"}), `{"User":"bob"}`},
+		{"pointer to json dash field", slog.Any("k", &loginRequest{User: "bob", Password: "hunter2"}), `{"User":"bob"}`},
+		{"MarshalJSON string is unquoted", slog.Any("k", redactingJSON("sk_live_123")), "[REDACTED]"},
+		{"MarshalText", slog.Any("k", redactingText("sk_live_123")), "[REDACTED]"},
+		{"unexported field stays out", slog.Any("k", struct{ token string }{"s3cr3t"}), "{}"},
+		{"Stringer is not used when JSON fails", slog.Any("k", leakyStringer{password: "s3cr3t"}), "!ERROR: json: unsupported type: chan int"},
+		{"typed nil marshaler", slog.Any("k", (*valueMarshaler)(nil)), "null"},
+		{"no HTML escaping", slog.Any("k", struct{ URL string }{"a?b=1&c=<2>"}), `{"URL":"a?b=1&c=<2>"}`},
+		{"map as JSON", slog.Any("k", map[string]int{"a": 1}), `{"a":1}`},
+		{"nil", slog.Any("k", nil), "null"},
+		{"typed nil error", slog.Any("k", error(typedNil)), "ERROR: <nil>"},
+		{"panicking method", slog.Any("k", panickingText{}), "!PANIC: boom"},
+		{"unsupported value", slog.Any("k", make(chan int)), "!ERROR: json: unsupported type: chan int"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx, span := newSpanLogger(t)
+
+			logger.LogAttrs(ctx, slog.LevelInfo, "msg", tt.attr)
+
+			if got := eventAttr(t, span, "k").AsString(); got != tt.want {
+				t.Fatalf("value = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSpanEventAndLogLineHideJSONDashField(t *testing.T) {
+	var out bytes.Buffer
+	span := &recordingSpan{}
+	ctx := trace.ContextWithSpan(context.Background(), span)
+	logger := slog.New(New(slog.NewJSONHandler(&out, nil)))
+
+	logger.InfoContext(ctx, "login", "req", loginRequest{User: "bob", Password: "hunter2"})
+
+	if strings.Contains(out.String(), "hunter2") {
+		t.Fatalf("log line leaks the password: %s", out.String())
+	}
+	if got := eventAttr(t, span, "req").AsString(); strings.Contains(got, "hunter2") {
+		t.Fatalf("span event leaks the password: %q", got)
+	}
 }

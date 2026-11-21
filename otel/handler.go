@@ -13,10 +13,13 @@
 package otel
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -79,7 +82,13 @@ const (
 // recorded as int64 nanoseconds; slog.Uint64 values as int64, or as a decimal
 // string when they exceed math.MaxInt64. String values longer than 1 KiB are
 // truncated and end with "…"; slice values ([]string, []int, []int64,
-// []float64, []bool) keep their first 128 elements. Attributes added with
+// []float64, []bool) keep their first 128 elements. Other values are encoded
+// as slog's JSON handler encodes them for the log line, after slog.LogValuer
+// values are resolved: an error that is not a json.Marshaler as "ERROR: " +
+// Error(); anything else with encoding/json (json.Marshaler and
+// encoding.TextMarshaler methods apply, fields tagged json:"-" and unexported
+// fields stay out, a JSON string is unquoted). A value encoding/json rejects is
+// recorded as "!ERROR: <error>", never as the raw value. Attributes added with
 // WithAttrs (logger.With) are recorded on every span event the derived handler
 // adds, before the record's own attributes, with the same keys, kinds and
 // caps; they are converted once, when WithAttrs is called.
@@ -90,7 +99,9 @@ type OtelHandler struct {
 	NoBaggage bool
 	// NoTraceEvents determines whether to record an event for every log on the active trace.
 	NoTraceEvents bool
-	// BaggageFilter can allow, drop, or redact baggage members before they are logged.
+	// BaggageFilter can allow, drop, or redact baggage members before they are
+	// logged. The baggage filter options add to it; setting the field directly
+	// replaces it.
 	BaggageFilter BaggageFilter
 
 	// groupPrefix is the dot-joined path of the groups opened with WithGroup.
@@ -124,14 +135,36 @@ func WithNoTraceEvents(noTraceEvents bool) OtelHandlerOpt {
 	}
 }
 
-// WithBaggageFilter configures a baggage filter for selective logging/redaction.
+// WithBaggageFilter adds a baggage filter for selective logging/redaction.
+// Baggage filter options (WithBaggageFilter, WithBaggageAllowList,
+// WithBaggageDenyList) compose in the order given: a member is logged only
+// when every filter keeps it, and each filter receives the value returned by
+// the previous one. A nil filter is ignored.
 func WithBaggageFilter(filter BaggageFilter) OtelHandlerOpt {
 	return func(handler *OtelHandler) {
-		handler.BaggageFilter = filter
+		handler.BaggageFilter = composeBaggageFilters(handler.BaggageFilter, filter)
 	}
 }
 
-// WithBaggageAllowList only logs baggage members whose keys are explicitly listed.
+// composeBaggageFilters returns a filter that applies first and then second.
+func composeBaggageFilters(first, second BaggageFilter) BaggageFilter {
+	if first == nil {
+		return second
+	}
+	if second == nil {
+		return first
+	}
+	return func(key, value string) (string, bool) {
+		value, ok := first(key, value)
+		if !ok {
+			return "", false
+		}
+		return second(key, value)
+	}
+}
+
+// WithBaggageAllowList only logs baggage members whose keys are explicitly
+// listed. It composes with the other baggage filter options.
 func WithBaggageAllowList(keys ...string) OtelHandlerOpt {
 	allowed := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
@@ -145,6 +178,7 @@ func WithBaggageAllowList(keys ...string) OtelHandlerOpt {
 }
 
 // WithBaggageDenyList drops baggage members whose keys are explicitly listed.
+// It composes with the other baggage filter options.
 func WithBaggageDenyList(keys ...string) OtelHandlerOpt {
 	denied := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
@@ -359,14 +393,62 @@ func (h OtelHandler) slogAttrToOtelAttr(attr slog.Attr, prefix string) []attribu
 			return []attribute.KeyValue{attribute.Float64Slice(key, capSlice(v))}
 		case []bool:
 			return []attribute.KeyValue{attribute.BoolSlice(key, capSlice(v))}
-		case error:
-			return []attribute.KeyValue{attribute.String(key, capString(fmt.Sprintf("ERROR: %+v", v)))}
 		default:
-			return []attribute.KeyValue{attribute.String(key, capString(fmt.Sprintf("%+v", v)))}
+			return []attribute.KeyValue{attribute.String(key, capString(anyString(v)))}
 		}
 	default:
 		return []attribute.KeyValue{}
 	}
+}
+
+// anyString encodes a KindAny value for a span event the way slog's JSON
+// handler encodes it for the log line, so values redacted there (json:"-"
+// fields, MarshalJSON, MarshalText) are redacted on the span too. The order is
+// documented on [OtelHandler]. A method that panics on a nil pointer receiver
+// gives "<nil>", as in slog; any other panic gives "!PANIC: <value>".
+func anyString(v any) string {
+	_, isJSONMarshaler := v.(json.Marshaler)
+	if err, ok := v.(error); ok && !isJSONMarshaler {
+		return "ERROR: " + encodeSafely(v, err.Error)
+	}
+	return encodeSafely(v, func() string { return jsonString(v) })
+}
+
+// jsonString encodes v as slog's JSON handler does (encoding/json without
+// HTML escaping), unquoting the result when it is a JSON string.
+func jsonString(v any) string {
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(v); err != nil {
+		return "!ERROR: " + err.Error()
+	}
+	text := bytes.TrimSuffix(encoded.Bytes(), []byte("\n"))
+	var unquoted string
+	if len(text) > 0 && text[0] == '"' && json.Unmarshal(text, &unquoted) == nil {
+		return unquoted
+	}
+	return string(text)
+}
+
+// encodeSafely runs encode, turning a panic into text: "<nil>" when v is a nil
+// pointer (a method that does not guard its receiver), as slog does, and
+// "!PANIC: <value>" otherwise.
+func encodeSafely(v any, encode func() string) (s string) {
+	defer func() {
+		if r := recover(); r != nil {
+			s = recoveredString(v, r)
+		}
+	}()
+	return encode()
+}
+
+// recoveredString describes a panic raised while encoding v.
+func recoveredString(v any, recovered any) string {
+	if value := reflect.ValueOf(v); value.Kind() == reflect.Pointer && value.IsNil() {
+		return "<nil>"
+	}
+	return fmt.Sprintf("!PANIC: %v", recovered)
 }
 
 // joinKey appends key to the dot-joined group path in prefix.

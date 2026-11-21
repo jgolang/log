@@ -130,6 +130,8 @@ On `log/otel` v1.6.x and earlier, `WithAttrs` attributes reach the log line only
 
 Span event string values are capped at 1 KiB and end with `…`. From `log/otel` v1.8.0, slice values (`[]string`, `[]int`, `[]int64`, `[]float64`, `[]bool`) also keep only their first 128 elements; the log line still gets the full record.
 
+From `log/otel` v1.9.0, other span event values are encoded as slog's JSON handler encodes them for the log line, so redaction applies to both: after `slog.LogValuer` values are resolved, an error is written as `ERROR: ` plus `Error()`, and any other value goes through `encoding/json` (`MarshalJSON` and `MarshalText` apply, fields tagged `json:"-"` and unexported fields stay out). A value `encoding/json` rejects is recorded as `!ERROR: <error>`. Earlier versions wrote these values with `%+v`.
+
 The `otel` handler disables baggage logging by default.
 If you need baggage in logs, enable it explicitly and prefer an allow-list:
 
@@ -144,6 +146,8 @@ Avoid enabling all baggage in production unless the upstream context is already
 sanitized. Baggage can contain tenant identifiers, tokens, or other sensitive
 values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
 `WithBaggageFilter` to keep log output intentional.
+
+From `log/otel` v1.9.0 these options compose in the order given: a member is logged only when every filter keeps it, and each filter sees the value the previous one returned. Earlier versions kept only the last of them, and `WithBaggageFilter(nil)` cleared the others; it is now ignored. Setting the `BaggageFilter` field directly still replaces every filter.
 
 From `log/otel` v1.9.0 baggage members are logged under a `baggage` group (`"baggage":{"request_id":"r1"}` in JSON, `baggage.request_id` on span events), so a member key chosen by the caller, such as `msg` or `level`, cannot replace a record key. Earlier versions added them as top-level attributes.
 
