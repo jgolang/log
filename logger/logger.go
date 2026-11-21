@@ -1,5 +1,11 @@
-// Package logger provides a flexible logging system with various log levels and contextual logging capabilities.
-
+// Package logger is the implementation behind [github.com/jgolang/log].
+//
+// Import github.com/jgolang/log instead: it exposes the package-level
+// helpers (log.Info, log.ErrorC, ...) and the instance API (log.New with
+// log.WithLevel and the other options), and its Logger and Option are aliases
+// of the types defined here. Import this package only for what log does not
+// re-export, such as the custom levels [LevelTrace], [LevelFatal] and
+// [LevelPanic].
 package logger
 
 import (

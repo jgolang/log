@@ -81,6 +81,8 @@ type OtelHandler struct {
 	groupPrefix string
 }
 
+// OtelHandlerOpt configures an [OtelHandler] built with [New] or
+// [NewOtelHandler].
 type OtelHandlerOpt func(handler *OtelHandler)
 
 // BaggageFilter returns the value to log and whether the member should be included.

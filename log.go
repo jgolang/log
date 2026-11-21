@@ -21,10 +21,14 @@ var std = func() *logger.Logger {
 	return logger.New(3+stdCalldepthOffset, nil, level)
 }()
 
+// NewJSONHandler makes the package-level logger write JSON records to
+// os.Stderr, its default. A wrapper set with [SetHandlerWrapper] is kept.
 func NewJSONHandler() {
 	std.SetJSONHandler(os.Stderr)
 }
 
+// NewTextHandler makes the package-level logger write text records to
+// os.Stderr. A wrapper set with [SetHandlerWrapper] is kept.
 func NewTextHandler() {
 	std.SetTextHandler(os.Stderr)
 }
