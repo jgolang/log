@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -169,6 +170,117 @@ func TestErrorLogsDeeperCodeBehindNilCode(t *testing.T) {
 			}
 			if origin, ok := group["origin"].(map[string]any); !ok || len(origin) == 0 {
 				t.Fatalf("expected a non-empty origin, got %v", group["origin"])
+			}
+		})
+	}
+}
+
+// errorAttrOf returns the value logged under the path of keys in record.
+func errorAttrOf(record map[string]any, path ...string) any {
+	var value any = record
+	for _, key := range path {
+		group, _ := value.(map[string]any)
+		value = group[key]
+	}
+	return value
+}
+
+func TestCodedErrorAttributeBecomesErrorGroup(t *testing.T) {
+	coded := errors.NewC(codes.New("PLN-111", "task not found"), "task 42 is missing")
+
+	tests := []struct {
+		name string
+		log  func(*Logger)
+		path []string
+	}{
+		{name: "instance attribute", path: []string{"error"}, log: func(l *Logger) {
+			l.Error("failed", "error", coded)
+		}},
+		{name: "instance attribute keeps its key", path: []string{"cause"}, log: func(l *Logger) {
+			l.Error("failed", "cause", coded)
+		}},
+		{name: "instance attribute behind fmt.Errorf", path: []string{"error"}, log: func(l *Logger) {
+			l.Error("failed", "error", fmt.Errorf("loading board: %w", coded))
+		}},
+		{name: "instance slog.Any attribute", path: []string{"error"}, log: func(l *Logger) {
+			l.Error("failed", slog.Any("error", coded))
+		}},
+		{name: "attribute inside a group", path: []string{"request", "error"}, log: func(l *Logger) {
+			l.Error("failed", slog.Group("request", "error", coded))
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			instance := New(WithJSONHandler(&buf))
+
+			tt.log(instance)
+
+			group, ok := errorAttrOf(decodeRecord(t, &buf), tt.path...).(map[string]any)
+			if !ok {
+				t.Fatalf("expected an error group at %v, got %q", tt.path, buf.String())
+			}
+			if group["code"] != "PLN-111" || group["msg"] != "task not found" || group["debug"] != "task 42 is missing" {
+				t.Fatalf("expected code, msg and debug of the coded error, got %v", group)
+			}
+			if origin, ok := group["origin"].(map[string]any); !ok || len(origin) == 0 {
+				t.Fatalf("expected a non-empty origin, got %v", group["origin"])
+			}
+		})
+	}
+}
+
+func TestPackageLevelCodedErrorAttributeBecomesErrorGroup(t *testing.T) {
+	buf := usePackageJSONHandler(t)
+	coded := errors.NewC(codes.New("PLN-111", "task not found"), "task 42 is missing")
+
+	Info("loading board", "err", coded)
+
+	group, ok := decodeRecord(t, buf)["err"].(map[string]any)
+	if !ok || group["code"] != "PLN-111" {
+		t.Fatalf("expected an err group with code PLN-111, got %q", buf.String())
+	}
+}
+
+func TestCodedErrorAttributeWithNilCodeOmitsCode(t *testing.T) {
+	var buf bytes.Buffer
+	instance := New(WithJSONHandler(&buf))
+
+	instance.Error("failed", "error", errors.WrapC(fmt.Errorf("plain failure"), nil))
+
+	group, ok := decodeRecord(t, &buf)["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected an error group, got %q", buf.String())
+	}
+	for _, key := range []string{"code", "msg"} {
+		if _, has := group[key]; has {
+			t.Fatalf("expected no %q attribute for a nil code, got %v", key, group)
+		}
+	}
+	if group["debug"] != "plain failure" {
+		t.Fatalf("expected debug %q, got %v", "plain failure", group["debug"])
+	}
+}
+
+func TestNonCodedErrorAttributeStaysString(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "plain error", err: fmt.Errorf("plain failure")},
+		{name: "typed nil coded error", err: (*errors.Error)(nil)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			instance := New(WithJSONHandler(&buf))
+
+			instance.Error("failed", "error", tt.err)
+
+			if _, isString := decodeRecord(t, &buf)["error"].(string); !isString {
+				t.Fatalf("expected a string error attribute, got %q", buf.String())
 			}
 		})
 	}

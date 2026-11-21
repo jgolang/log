@@ -1,12 +1,12 @@
 package log
 
 import (
-	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 
-	"github.com/jgolang/errors"
+	"github.com/jgolang/log/internal/codederror"
 	"github.com/jgolang/log/logger"
 )
 
@@ -74,46 +74,6 @@ func levelEnabled(lvl slog.Level) bool {
 	return lvl >= level.Level()
 }
 
-// codedErrorOf returns the first jgolang/errors error in err's chain, or nil.
-// The type assertion keeps the common unwrapped case free of the allocation
-// errors.As costs; errors.As finds one behind wrappers such as fmt.Errorf.
-func codedErrorOf(err error) *errors.Error {
-	if coded, ok := err.(*errors.Error); ok {
-		return coded
-	}
-
-	var coded *errors.Error
-	if stderrors.As(err, &coded) {
-		return coded
-	}
-
-	return nil
-}
-
-// codedErrorGroup builds the "error" group for a jgolang/errors error. code
-// and msg come from errors.CodeOf, which looks past errors whose code is nil;
-// they are left out when the chain has no code, so logging never panics on
-// the error path it is meant to report. debug and origin come from coded, the
-// first jgolang/errors error, which is where the chain was last wrapped.
-func codedErrorGroup(coded *errors.Error) slog.Attr {
-	debug := ""
-	if coded.Wrapper != nil {
-		debug = coded.Wrapper.Error()
-	}
-
-	code := errors.CodeOf(coded)
-	if code == nil {
-		return slog.Group("error", "debug", debug, "origin", coded.StackTrace())
-	}
-
-	return slog.Group("error",
-		"code", code.Str(),
-		"msg", code.Msg(),
-		"debug", debug,
-		"origin", coded.StackTrace(),
-	)
-}
-
 func validateArgs(args ...any) (string, []any) {
 	if len(args) == 0 {
 		return "", nil
@@ -126,9 +86,11 @@ func validateArgs(args ...any) (string, []any) {
 		rest = args[1:]
 	case error:
 		msg = v.Error()
-		rest = args[1:]
-		if coded := codedErrorOf(v); coded != nil {
-			rest = append(rest, codedErrorGroup(coded))
+		// Clip so append never writes into spare capacity of the caller's slice.
+		rest = slices.Clip(args[1:])
+		// The group has no text attribute: msg already carries v.Error().
+		if coded := codederror.Of(v); coded != nil {
+			rest = append(rest, codederror.Group("error", coded))
 		} else {
 			rest = append(rest, "error", v)
 		}
