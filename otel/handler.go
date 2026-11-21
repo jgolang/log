@@ -1,10 +1,15 @@
 // Package otel provides a log/slog handler that adds OpenTelemetry trace
 // context, and optionally filtered baggage, to records written through
 // github.com/jgolang/log. It is its own module, so programs that do not use it
-// do not depend on OpenTelemetry. Upgrading from log v1.4.x or earlier, raise
-// both modules together:
+// do not depend on OpenTelemetry; it has been since log v1.5.0. Upgrading from
+// log v1.4.x or earlier, raise both modules together:
 //
-//	go get github.com/jgolang/log@v1.5.0 github.com/jgolang/log/otel@v1.5.0
+//	go get github.com/jgolang/log@v1.6.0 github.com/jgolang/log/otel@v1.6.0
+//
+// Attach the handler to a jgolang logger with log.SetHandlerWrapper or the
+// log.WithHandlerWrapper option (log v1.6.0 or later):
+//
+//	log.SetHandlerWrapper(otel.NewOtelHandler())
 package otel
 
 import (
