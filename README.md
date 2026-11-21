@@ -149,6 +149,8 @@ values; use `WithBaggageAllowList`, `WithBaggageDenyList`, or
 
 From `log/otel` v1.9.0 these options compose in the order given: a member is logged only when every filter keeps it, and each filter sees the value the previous one returned. Earlier versions kept only the last of them, and `WithBaggageFilter(nil)` cleared the others; it is now ignored. Setting the `BaggageFilter` field directly still replaces every filter.
 
+From `log/otel` v1.9.0 baggage members are logged under a `baggage` group (`"baggage":{"request_id":"r1"}` in JSON, `baggage.request_id` on span events), so a member key chosen by the caller, such as `msg` or `level`, cannot replace a record key. Earlier versions added them as top-level attributes.
+
 ## Verification
 
 ```bash

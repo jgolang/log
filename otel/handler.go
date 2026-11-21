@@ -41,6 +41,11 @@ const (
 	// SpanEventKey is the prefix key used by the Otel handler
 	// to inject the log record in the recording span, as a span event.
 	SpanEventKey = "log"
+	// BaggageKey is the group under which the Otel handler logs baggage
+	// members, so a member key cannot replace a record key such as msg or
+	// level. It is added after the record's attributes; an application
+	// attribute with the same key would be written twice.
+	BaggageKey = "baggage"
 )
 
 const (
@@ -66,7 +71,8 @@ const (
 // by:
 //
 // 1. Adding otel span and trace IDs to the log record.
-// 2. Adding otel context baggage members to the log record.
+// 2. Adding otel context baggage members to the log record, under the
+// BaggageKey group (e.g. "baggage":{"request_id":"r1"} in JSON).
 // 3. Setting slog record as otel span event.
 // 4. Adding slog record attributes to the otel span event.
 // 5. Setting span status based on slog record level (only if >= slog.LevelError).
@@ -210,9 +216,11 @@ func (h OtelHandler) Handle(ctx context.Context, record slog.Record) error {
 		return h.Next.Handle(ctx, record)
 	}
 	if !h.NoBaggage {
-		// Adding context baggage members to log record.
-		b := baggage.FromContext(ctx)
-		for _, m := range b.Members() {
+		// Adding context baggage members to log record, under their own group:
+		// member keys come from the caller and must not replace record keys.
+		bag := baggage.FromContext(ctx).Members()
+		members := make([]slog.Attr, 0, len(bag))
+		for _, m := range bag {
 			key := m.Key()
 			value := m.Value()
 			if h.BaggageFilter != nil {
@@ -222,7 +230,10 @@ func (h OtelHandler) Handle(ctx context.Context, record slog.Record) error {
 				}
 				value = filteredValue
 			}
-			record.AddAttrs(slog.String(key, value))
+			members = append(members, slog.String(key, value))
+		}
+		if len(members) > 0 {
+			record.AddAttrs(slog.Attr{Key: BaggageKey, Value: slog.GroupValue(members...)})
 		}
 	}
 
