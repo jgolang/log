@@ -3,7 +3,9 @@
 package codederror
 
 import (
+	"fmt"
 	"log/slog"
+	"reflect"
 
 	"github.com/jgolang/errors"
 )
@@ -12,7 +14,9 @@ import (
 // the chain depth-first, as errors.As does, and returns nil when it meets an
 // error that implements slog.LogValuer before a coded one: slog logs that
 // value instead, so an error that hides what it wraps keeps it hidden, even
-// behind wrappers such as fmt.Errorf. The walk does not allocate.
+// behind wrappers such as fmt.Errorf. A nil pointer ends its branch without
+// calling Unwrap, which usually dereferences the receiver. The walk does not
+// allocate.
 func Of(err error) *errors.Error {
 	coded, _ := find(err)
 	return coded
@@ -27,6 +31,11 @@ func find(err error) (coded *errors.Error, found bool) {
 		}
 		if coded, isCoded := err.(*errors.Error); isCoded {
 			return coded, true
+		}
+		if isNilPointer(err) {
+			// Unwrap on a nil receiver usually dereferences it; slog logs
+			// such an error as "<nil>", so the walk stops here.
+			return nil, false
 		}
 		switch wrapper := err.(type) {
 		case interface{ Unwrap() error }:
@@ -45,6 +54,27 @@ func find(err error) (coded *errors.Error, found bool) {
 	return nil, false
 }
 
+// Text returns err.Error() as slog writes an error that panics: "<nil>" when
+// err is a nil pointer, "!PANIC: <value>" otherwise, so logging never panics.
+func Text(err error) (text string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if isNilPointer(err) {
+				text = "<nil>"
+				return
+			}
+			text = fmt.Sprintf("!PANIC: %v", recovered)
+		}
+	}()
+	return err.Error()
+}
+
+// isNilPointer reports whether err holds a nil pointer.
+func isNilPointer(err error) bool {
+	value := reflect.ValueOf(err)
+	return value.Kind() == reflect.Pointer && value.IsNil()
+}
+
 // Group builds the group, under key, for coded: code, msg, debug and origin.
 // code and msg come from errors.CodeOf, which looks past errors whose code is
 // nil; they are left out when the chain has no code, so logging never panics
@@ -58,7 +88,7 @@ func Group(key string, coded *errors.Error) slog.Attr {
 // so the context added by wrappers outside coded is not lost when the error
 // is not also the record's message.
 func GroupWithText(key string, err error, coded *errors.Error) slog.Attr {
-	attrs := append([]slog.Attr{slog.String("text", err.Error())}, fields(coded)...)
+	attrs := append([]slog.Attr{slog.String("text", Text(err))}, fields(coded)...)
 	return slog.Attr{Key: key, Value: slog.GroupValue(attrs...)}
 }
 
