@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/jgolang/log/internal/codederror"
 	"github.com/jgolang/log/logger"
 )
 
@@ -83,9 +84,14 @@ func validateArgs(args ...any) (string, []any) {
 		msg = v
 		rest = args[1:]
 	case error:
-		// The handler's ReplaceAttr expands a coded error into its group.
 		msg = v.Error()
-		rest = append(args[1:], "error", v)
+		rest = args[1:]
+		// The group has no text attribute: msg already carries v.Error().
+		if coded := codederror.Of(v); coded != nil {
+			rest = append(rest, codederror.Group("error", coded))
+		} else {
+			rest = append(rest, "error", v)
+		}
 	default:
 		// Keep the caller's value instead of dropping it (LOG-03).
 		msg = fmt.Sprint(v)

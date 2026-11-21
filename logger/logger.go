@@ -195,6 +195,7 @@ func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args []a
 	if cfg.logger == nil || !cfg.logger.Enabled(ctx, level) {
 		return
 	}
+	args = expandCodedErrors(args)
 	if cfg.addSource {
 		withStack := level == slog.LevelDebug && cfg.debugStack
 		depth := 1

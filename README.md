@@ -35,11 +35,13 @@ func main(){
 
 The first argument is the message; the rest are key-value attributes. A string is used as is. An error becomes the message and also adds an `error` attribute holding the error. Any other value is printed with `fmt.Sprint`, so `log.Info(42, "request_id", id)` logs the message `42`.
 
-Any attribute whose value is an error with a `jgolang/errors` error anywhere in its chain (also behind `fmt.Errorf`) is logged as a group under its own key, with `code`, `msg`, `debug` and `origin`. This applies to the first-argument `error` attribute, to later attributes (`log.Info("msg", "err", err)`), to the instance API (`logger.Error("failed", "error", err)`) and to attributes inside groups. `code` and `msg` come from the first non-nil code in the chain, also below an error whose code is nil, and are left out when the chain has no code; `debug` and `origin` come from the first `jgolang/errors` error. Any other error is logged as its message:
+Any attribute whose value is an error with a `jgolang/errors` error anywhere in its chain (also behind `fmt.Errorf`) is logged as a group under its own key, with `code`, `msg`, `debug` and `origin`. This applies to the first-argument `error` attribute, to later attributes (`log.Info("msg", "err", err)`), to the instance API (`logger.Error("failed", "error", err)`) and to attributes inside groups. The group is built before the handler, so handler wrappers such as the `otel` handler see it too. `code` and `msg` come from the first non-nil code in the chain, also below an error whose code is nil, and are left out when the chain has no code; `debug` and `origin` come from the first `jgolang/errors` error. Except for the first argument, whose message already carries it, the group starts with `text`, the full `err.Error()`, so the context added by outer wrappers is kept. Any other error, and an attribute with an empty key, is logged as is:
 
 ```terminal
-{"level":"ERROR","msg":"failed","error":{"code":"PLN-111","msg":"task not found","debug":"task 42 is missing","origin":{"frame_0":"..."}},"source":{...}}
+{"level":"ERROR","msg":"failed","error":{"text":"loading board: [PLN-111](task not found): task 42 is missing","code":"PLN-111","msg":"task not found","debug":"task 42 is missing","origin":{"frame_0":"..."}},"source":{...}}
 ```
+
+The whole chain is searched. An error type that must keep its wrapped detail out of logs should implement `slog.LogValuer`: an error that does is never expanded, in any position, and slog logs its `LogValue` instead.
 
 ## Configuration
 

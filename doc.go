@@ -41,10 +41,14 @@
 // Any attribute whose value is an error with a jgolang/errors error anywhere
 // in its chain (also behind fmt.Errorf) is logged as a group under its own
 // key, with code, msg, debug and origin, for the package helpers and the
-// Logger methods alike, also inside groups. code and msg come from the first
+// Logger methods alike, also inside groups. The group is built before the
+// handler, so handler wrappers see it too. code and msg come from the first
 // non-nil code in the chain and are left out when there is none; debug and
-// origin come from the first jgolang/errors error. Any other error is logged
-// as its message.
+// origin come from the first jgolang/errors error. Except for the first
+// argument, whose message already carries it, the group starts with text,
+// the full err.Error(). Any other error, and an attribute with an empty key,
+// is logged as is. An error that implements slog.LogValuer is never
+// expanded, so a type that must hide its wrapped detail implements it.
 //
 // # Fatal
 //

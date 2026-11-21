@@ -16,24 +16,19 @@ var LevelNames = map[slog.Leveler]string{
 	LevelPanic: "PANIC",
 }
 
-// ReplaceAttr normalizes custom levels and expands errors before the handler
-// encodes them. Any attribute whose value is an error with a jgolang/errors
-// error in its chain, also inside a group, becomes a group under the same key
-// with code, msg, debug and origin; other errors are left as they are.
+// ReplaceAttr normalizes custom levels before the handler encodes them.
 func ReplaceAttr(_ []string, attr slog.Attr) slog.Attr {
-	if attr.Value.Kind() != slog.KindAny {
+	if attr.Key != slog.LevelKey {
 		return attr
 	}
 
-	switch value := attr.Value.Any().(type) {
-	case slog.Level:
-		if name, found := LevelNames[value]; found && attr.Key == slog.LevelKey {
-			attr.Value = slog.StringValue(name)
-		}
-	case error:
-		if coded := codedErrorOf(value); coded != nil {
-			return codedErrorGroup(attr.Key, coded)
-		}
+	level, ok := attr.Value.Any().(slog.Level)
+	if !ok {
+		return attr
+	}
+
+	if name, found := LevelNames[level]; found {
+		attr.Value = slog.StringValue(name)
 	}
 
 	return attr
