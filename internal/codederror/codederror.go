@@ -63,11 +63,7 @@ func GroupWithText(key string, err error, coded *errors.Error) slog.Attr {
 }
 
 func fields(coded *errors.Error) []slog.Attr {
-	debug := ""
-	if coded.Wrapper != nil {
-		debug = coded.Wrapper.Error()
-	}
-
+	debug := coded.Detail()
 	origin := slog.Attr{Key: "origin", Value: coded.StackTrace()}
 	code := errors.CodeOf(coded)
 	if code == nil {
