@@ -26,6 +26,10 @@ type Logger struct {
 	debugStack bool
 	mu         sync.RWMutex
 	logger     *slog.Logger
+	// handler is the JSON or text handler the logger built, before wrap is
+	// applied. Both are kept so that changing either rebuilds logger.
+	handler slog.Handler
+	wrap    func(slog.Handler) slog.Handler
 }
 
 type loggerConfig struct {
@@ -67,6 +71,17 @@ func WithJSONHandler(w io.Writer) Option {
 func WithTextHandler(w io.Writer) Option {
 	return func(l *Logger) {
 		l.SetTextHandler(w)
+	}
+}
+
+// WithHandlerWrapper wraps the JSON or text handler the logger builds with
+// wrap, for example to add OpenTelemetry trace correlation. Level filtering
+// and attribute normalization keep working because the built handler still
+// encodes the record. The wrapper is kept across handler changes, so the
+// option works in any order. See Logger.SetHandlerWrapper.
+func WithHandlerWrapper(wrap func(slog.Handler) slog.Handler) Option {
+	return func(l *Logger) {
+		l.SetHandlerWrapper(wrap)
 	}
 }
 
@@ -112,10 +127,35 @@ func (l *Logger) snapshot() loggerConfig {
 	}
 }
 
-func (l *Logger) setBackend(next *slog.Logger) {
+func (l *Logger) setBackend(handler slog.Handler) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.logger = next
+	l.handler = handler
+	l.logger = slog.New(l.wrappedHandler())
+}
+
+// wrappedHandler applies the wrapper to the built handler. A wrapper that
+// returns nil is ignored rather than left to panic in slog.New. The caller
+// holds l.mu.
+func (l *Logger) wrappedHandler() slog.Handler {
+	if l.wrap == nil {
+		return l.handler
+	}
+	if wrapped := l.wrap(l.handler); wrapped != nil {
+		return wrapped
+	}
+	return l.handler
+}
+
+// SetHandlerWrapper wraps the JSON or text handler the logger builds with
+// wrap, now and after later SetJSONHandler or SetTextHandler calls. A nil
+// wrap removes the wrapper. If wrap returns nil, the built handler is used
+// unwrapped.
+func (l *Logger) SetHandlerWrapper(wrap func(slog.Handler) slog.Handler) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.wrap = wrap
+	l.logger = slog.New(l.wrappedHandler())
 }
 
 // log is called directly by every exported logging method, so that a
@@ -143,7 +183,7 @@ func (l *Logger) SetJSONHandler(w io.Writer) {
 		Level:       l.level,
 		ReplaceAttr: ReplaceAttr,
 	}
-	l.setBackend(slog.New(slog.NewJSONHandler(w, opts)))
+	l.setBackend(slog.NewJSONHandler(w, opts))
 }
 
 // SetTextHandler configures the logger to emit text logs to the provided writer.
@@ -152,7 +192,7 @@ func (l *Logger) SetTextHandler(w io.Writer) {
 		Level:       l.level,
 		ReplaceAttr: ReplaceAttr,
 	}
-	l.setBackend(slog.New(slog.NewTextHandler(w, opts)))
+	l.setBackend(slog.NewTextHandler(w, opts))
 }
 
 // Debug logs a debug-level message with optional arguments.

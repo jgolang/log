@@ -84,6 +84,10 @@ logger := log.New(
 logger.Info("service started")
 ```
 
+### Handler wrappers
+
+`WithHandlerWrapper` (instance) and `SetHandlerWrapper` (package-level logger) wrap the JSON or text handler the logger builds with any `func(slog.Handler) slog.Handler`, such as the `otel` handler below. The built handler still encodes the record, so the level, the custom level names and `source` keep working. The wrapper is kept when the handler changes later (`SetJSONHandler`, `SetTextHandler`, `NewJSONHandler`, `NewTextHandler`), so the option order does not matter. A nil wrapper removes it.
+
 ## OpenTelemetry
 
 `github.com/jgolang/log/otel` is its own module since `log` v1.5.0, so importing `jgolang/log` adds no OpenTelemetry requirement.
@@ -96,15 +100,25 @@ go get github.com/jgolang/log@v1.5.0 github.com/jgolang/log/otel@v1.5.0
 
 Raising only `log` makes Go report that no required module provides `github.com/jgolang/log/otel`; `log/otel` v1.5.0 requires `log` v1.5.0, so adding it raises `log` too. New users run `go get github.com/jgolang/log/otel`.
 
-The `otel` handler now disables baggage logging by default.
+Wrap the logger's handler with `otel.NewOtelHandler` so records logged with a context carry its `trace_id` and `span_id` and are added to the span as events:
+
+```go
+log.SetHandlerWrapper(otel.NewOtelHandler())
+log.InfoC(ctx, "order created")
+
+// or, for an instance:
+logger := log.New(log.WithHandlerWrapper(otel.NewOtelHandler()))
+logger.InfoContext(ctx, "order created")
+```
+
+The `otel` handler disables baggage logging by default.
 If you need baggage in logs, enable it explicitly and prefer an allow-list:
 
 ```go
-handler := otel.New(
-    slog.NewJSONHandler(os.Stdout, nil),
+log.SetHandlerWrapper(otel.NewOtelHandler(
     otel.WithNoBaggage(false),
     otel.WithBaggageAllowList("request_id", "tenant"),
-)
+))
 ```
 
 Avoid enabling all baggage in production unless the upstream context is already
