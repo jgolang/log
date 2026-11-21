@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -28,6 +29,22 @@ func BenchmarkHandleSpanEvent(b *testing.B) {
 				l.logger.InfoContext(ctx, "order created", "order_id", 42, "status", "ok")
 			}
 		})
+	}
+}
+
+// BenchmarkHandleSpanEventAnyValues measures span event encoding of KindAny
+// values: a struct and an error.
+func BenchmarkHandleSpanEventAnyValues(b *testing.B) {
+	logger := slog.New(New(slog.NewJSONHandler(io.Discard, nil)))
+	ctx := trace.ContextWithSpan(context.Background(), &discardSpan{})
+	order := struct {
+		ID     int
+		Status string
+	}{42, "ok"}
+	err := errors.New("payment declined")
+	b.ReportAllocs()
+	for b.Loop() {
+		logger.InfoContext(ctx, "order failed", "order", order, "error", err)
 	}
 }
 
