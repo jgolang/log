@@ -43,3 +43,13 @@ jobs:
       - name: govulncheck (otel)
         working-directory: otel
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+      # The steps above test otel against the published log it requires. This
+      # one tests it against the log in this commit, so a root change that
+      # breaks otel fails here instead of at the next otel release. The replace
+      # exists only in the CI checkout; never commit it.
+      - name: test (otel against this commit's log)
+        working-directory: otel
+        run: |
+          go mod edit -replace github.com/jgolang/log=../
+          go mod tidy
+          go test -race ./...
