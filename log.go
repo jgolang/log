@@ -12,9 +12,13 @@ import (
 
 var level = new(slog.LevelVar)
 
+// stdCalldepthOffset is the extra frame the package-level helpers add: they
+// call the std Logger method, which reports its caller at calldepth 3.
+const stdCalldepthOffset = 1
+
 var std = func() *logger.Logger {
 	level.Set(slog.LevelDebug)
-	return logger.New(3, nil, level)
+	return logger.New(3+stdCalldepthOffset, nil, level)
 }()
 
 func NewJSONHandler() {
@@ -25,10 +29,12 @@ func NewTextHandler() {
 	std.SetTextHandler(os.Stderr)
 }
 
-// SetCalldepth configure the number of stack frames
-// to ascend, with 0 identifying the caller of Caller for default loggin
+// SetCalldepth configures the number of stack frames to ascend for the
+// source metadata of package-level logs. The default, 3, reports the code that
+// calls log.Info and the other helpers; add one for each wrapper function
+// between that code and the helper.
 func SetCalldepth(calldepth int) {
-	std.SetCalldepth(calldepth)
+	std.SetCalldepth(calldepth + stdCalldepthOffset)
 }
 
 // SetLevel sets the logging level for the Logger instance.

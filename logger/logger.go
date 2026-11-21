@@ -20,7 +20,7 @@ type Option func(*Logger)
 
 // Logger manages logging operations with various log levels and modes.
 type Logger struct {
-	calldepth  int // Number of stack frames to ascend when generating log entries.
+	calldepth  int // Frames to ascend for source metadata; see SetCalldepth.
 	level      *slog.LevelVar
 	addSource  bool
 	debugStack bool
@@ -71,7 +71,8 @@ func WithTextHandler(w io.Writer) Option {
 }
 
 // New creates and initializes a new Logger instance.
-// calldepth: Number of stack frames to ascend for log entries.
+// calldepth: Number of stack frames to ascend for source metadata; 3 reports
+// the caller of the Logger method (see SetCalldepth).
 // pc: Deprecated and ignored. Kept for backward compatibility.
 func New(calldepth int, _ []uintptr, levels ...*slog.LevelVar) *Logger {
 	level := new(slog.LevelVar)
@@ -117,34 +118,22 @@ func (l *Logger) setBackend(next *slog.Logger) {
 	l.logger = next
 }
 
-func (c loggerConfig) sourceAttr(withStack bool) slog.Attr {
-	if !c.addSource {
-		return slog.Attr{}
-	}
-	if withStack {
-		return sourceWithStackTrace(c.calldepth + 1)
-	}
-	return source(c.calldepth + 1)
-}
-
-func (c loggerConfig) appendSource(args []any, withStack bool) []any {
-	attr := c.sourceAttr(withStack)
-	if attr.Key == "" {
-		return args
-	}
-	return append(args, attr)
-}
-
-func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args []any, withStack bool) {
+// log is called directly by every exported logging method, so that a
+// calldepth of 3 reports the caller of that method: runtime.Callers, callers,
+// log, the method, then its caller.
+func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args []any) {
 	cfg := l.snapshot()
-	logWithConfig(ctx, level, msg, args, cfg, withStack)
-}
-
-func logWithConfig(ctx context.Context, level slog.Level, msg string, args []any, cfg loggerConfig, withStack bool) {
 	if cfg.logger == nil || !cfg.logger.Enabled(ctx, level) {
 		return
 	}
-	args = cfg.appendSource(args, withStack)
+	if cfg.addSource {
+		withStack := level == slog.LevelDebug && cfg.debugStack
+		depth := 1
+		if withStack {
+			depth = maxStackDepth
+		}
+		args = append(args, sourceAttr(callers(cfg.calldepth+1, depth), withStack))
+	}
 	cfg.logger.Log(ctx, level, msg, args...)
 }
 
@@ -168,45 +157,43 @@ func (l *Logger) SetTextHandler(w io.Writer) {
 
 // Debug logs a debug-level message with optional arguments.
 func (l *Logger) Debug(msg string, args ...any) {
-	cfg := l.snapshot()
-	logWithConfig(context.Background(), slog.LevelDebug, msg, args, cfg, cfg.debugStack)
+	l.log(context.Background(), slog.LevelDebug, msg, args)
 }
 
 // DebugContext logs a debug-level message with optional arguments and context.
 func (l *Logger) DebugContext(ctx context.Context, msg string, args ...interface{}) {
-	cfg := l.snapshot()
-	logWithConfig(ctx, slog.LevelDebug, msg, args, cfg, cfg.debugStack)
+	l.log(ctx, slog.LevelDebug, msg, args)
 }
 
 // Warn logs a warning-level message with optional arguments.
 func (l *Logger) Warn(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelWarn, msg, args, false)
+	l.log(context.Background(), slog.LevelWarn, msg, args)
 }
 
 // WarnContext logs a warning-level message with optional arguments and context.
 func (l *Logger) WarnContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelWarn, msg, args, false)
+	l.log(ctx, slog.LevelWarn, msg, args)
 }
 
 // Error logs an error-level message with optional arguments.
 func (l *Logger) Error(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelError, msg, args, false)
+	l.log(context.Background(), slog.LevelError, msg, args)
 }
 
 // ErrorContext logs an error-level message with optional arguments and context.
 func (l *Logger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelError, msg, args, false)
+	l.log(ctx, slog.LevelError, msg, args)
 }
 
 // Panic logs a panic-level message, then panics with the message.
 func (l *Logger) Panic(msg string, args ...any) {
-	l.log(context.Background(), LevelPanic, msg, args, false)
+	l.log(context.Background(), LevelPanic, msg, args)
 	panic(msg)
 }
 
 // PanicContext logs a panic-level message with context, then panics with the message.
 func (l *Logger) PanicContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelPanic, msg, args, false)
+	l.log(ctx, LevelPanic, msg, args)
 	panic(msg)
 }
 
@@ -214,7 +201,7 @@ func (l *Logger) PanicContext(ctx context.Context, msg string, args ...any) {
 // Like os.Exit, it does not run deferred functions, so flush telemetry and
 // close resources before calling it.
 func (l *Logger) Fatal(msg string, args ...any) {
-	l.log(context.Background(), LevelFatal, msg, args, false)
+	l.log(context.Background(), LevelFatal, msg, args)
 	os.Exit(1)
 }
 
@@ -222,36 +209,39 @@ func (l *Logger) Fatal(msg string, args ...any) {
 // Like os.Exit, it does not run deferred functions, so flush telemetry and
 // close resources before calling it.
 func (l *Logger) FatalContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelFatal, msg, args, false)
+	l.log(ctx, LevelFatal, msg, args)
 	os.Exit(1)
 }
 
 // Print logs a trace-level message with optional arguments.
 func (l *Logger) Print(msg string, args ...any) {
-	l.log(context.Background(), LevelTrace, msg, args, false)
+	l.log(context.Background(), LevelTrace, msg, args)
 }
 
 // PrintContext logs a trace-level message with context and optional arguments.
 func (l *Logger) PrintContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, LevelTrace, msg, args, false)
+	l.log(ctx, LevelTrace, msg, args)
 }
 
 // Info logs an info-level message with optional arguments.
 func (l *Logger) Info(msg string, args ...any) {
-	l.log(context.Background(), slog.LevelInfo, msg, args, false)
+	l.log(context.Background(), slog.LevelInfo, msg, args)
 }
 
 // InfoContext logs an info-level message with context and optional arguments.
 func (l *Logger) InfoContext(ctx context.Context, msg string, args ...any) {
-	l.log(ctx, slog.LevelInfo, msg, args, false)
+	l.log(ctx, slog.LevelInfo, msg, args)
 }
 
 // StackTrace provides a stack trace of up to 10 layers from where the error or incident was generated.
 func (l *Logger) StackTrace() slog.Attr {
-	return sourceWithStackTrace(l.snapshot().calldepth + 1)
+	// runtime.Callers, callers, StackTrace, then its caller at calldepth 3.
+	return sourceAttr(callers(l.snapshot().calldepth, maxStackDepth), true)
 }
 
-// SetCalldepth configures the number of stack frames to ascend for logging.
+// SetCalldepth configures the number of stack frames to ascend for source
+// metadata. The default, 3, reports the code that calls the Logger method;
+// add one for each wrapper function between that code and the method.
 func (l *Logger) SetCalldepth(calldepth int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

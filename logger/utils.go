@@ -24,33 +24,22 @@ func itoa(buf *[]byte, i int64, wid int) {
 	*buf = append(*buf, b[bp:]...)
 }
 
-// Source returns a Source for the log event.
-// If the Record was created without the necessary information,
-// or if the location is unavailable, it returns a non-nil *Source
-// with zero fields.
-func source(calldepth int) slog.Attr {
-	pc := make([]uintptr, 1)
-	num := runtime.Callers(calldepth, pc)
-	fs := runtime.CallersFrames(pc[0:num])
-	f, _ := fs.Next()
-	var as []any
-	if f.Function != "" {
-		as = append(as, slog.String("func", getFuncName(f.Function)))
-	}
-	if f.File != "" {
-		as = append(as, slog.String("file", filepath.Base(f.File)))
-	}
-	if f.Line != 0 {
-		as = append(as, slog.Int("line", f.Line))
-	}
-	return slog.Group("source", as...)
+// maxStackDepth is the number of frames a stack trace keeps.
+const maxStackDepth = 10
+
+// callers returns up to depth program counters of the current goroutine's
+// stack, skipping skip frames as runtime.Callers does: 0 is runtime.Callers,
+// 1 is callers and 2 is the function that calls callers.
+func callers(skip, depth int) []uintptr {
+	pcs := make([]uintptr, depth)
+	return pcs[:runtime.Callers(skip, pcs)]
 }
 
-func sourceWithStackTrace(calldepth int) slog.Attr {
-	pc := make([]uintptr, 10)
-	num := runtime.Callers(calldepth, pc)
-	fs := runtime.CallersFrames(pc[0:num])
-	f, _ := fs.Next()
+// sourceAttr builds the "source" group from pcs, whose first entry is the
+// call site to report. withStack adds a stack trace that starts at that call
+// site.
+func sourceAttr(pcs []uintptr, withStack bool) slog.Attr {
+	f, _ := runtime.CallersFrames(pcs).Next()
 	var as []any
 	if f.Function != "" {
 		as = append(as, slog.String("func", getFuncName(f.Function)))
@@ -61,8 +50,9 @@ func sourceWithStackTrace(calldepth int) slog.Attr {
 	if f.Line != 0 {
 		as = append(as, slog.Int("line", f.Line))
 	}
-	stack := getStackTrace(calldepth + 1)
-	as = append(as, stack)
+	if withStack {
+		as = append(as, getStackTrace(pcs))
+	}
 	return slog.Group("source", as...)
 }
 
@@ -71,10 +61,9 @@ func getFuncName(function string) string {
 	return function[p+1:]
 }
 
-func getStackTrace(calldepth int) slog.Attr {
-	pc := make([]uintptr, 10)
-	num := runtime.Callers(calldepth, pc)
-	frames := runtime.CallersFrames(pc[0:num])
+func getStackTrace(pcs []uintptr) slog.Attr {
+	num := len(pcs)
+	frames := runtime.CallersFrames(pcs)
 	var as []any
 	level := 0
 	for i := 0; i < num; i++ {
