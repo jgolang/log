@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jgolang/errors"
+	"github.com/jgolang/errors/codes"
 )
 
 func TestSetLevelUpdatesCurrentLevel(t *testing.T) {
@@ -180,5 +184,23 @@ func TestInfoKeepsAnyFirstArgumentAsMessage(t *testing.T) {
 				t.Fatalf("expected request_id attribute, got %v", record["request_id"])
 			}
 		})
+	}
+}
+
+func TestDisabledLevelSkipsArgumentHandling(t *testing.T) {
+	coded := errors.NewC(codes.AppValidation, "invalid value")
+	std.SetJSONHandler(io.Discard)
+	old := SetLevel(slog.LevelInfo)
+	t.Cleanup(func() {
+		SetLevel(old)
+		NewJSONHandler()
+	})
+
+	allocs := testing.AllocsPerRun(100, func() {
+		Debug(coded, "request_id", "abc")
+	})
+
+	if allocs != 0 {
+		t.Fatalf("Debug at Info level allocated %v times per call, want 0", allocs)
 	}
 }

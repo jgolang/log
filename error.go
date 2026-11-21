@@ -2,10 +2,14 @@ package log
 
 import (
 	"context"
+	"log/slog"
 )
 
 // Error logs an error-level message using the global logger.
 func Error(args ...any) {
+	if !levelEnabled(slog.LevelError) {
+		return
+	}
 	msg, attrs := validateArgs(args...)
 	std.Error(msg, attrs...)
 }
@@ -13,6 +17,9 @@ func Error(args ...any) {
 // ErrorC logs an error-level message with context using the global logger.
 // ctx: The context for the log entry..
 func ErrorC(ctx context.Context, args ...interface{}) {
+	if !levelEnabled(slog.LevelError) {
+		return
+	}
 	msg, attrs := validateArgs(args...)
 	std.ErrorContext(ctx, msg, attrs...)
 }

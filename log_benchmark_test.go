@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -87,6 +88,34 @@ func BenchmarkValidateArgs(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				validateArgs(tt.args...)
+			}
+		})
+	}
+}
+
+func BenchmarkPackageLevel(b *testing.B) {
+	coded := errors.NewC(codes.AppValidation, "invalid value")
+	tests := []struct {
+		name string
+		log  func()
+	}{
+		{name: "disabled_string", log: func() { Debug("hello", "request_id", "abc") }},
+		{name: "disabled_coded_error", log: func() { Debug(coded, "request_id", "abc") }},
+		{name: "disabled_coded_error_context", log: func() { DebugC(context.Background(), coded, "request_id", "abc") }},
+	}
+
+	std.SetJSONHandler(io.Discard)
+	old := SetLevel(slog.LevelInfo)
+	b.Cleanup(func() {
+		SetLevel(old)
+		NewJSONHandler()
+	})
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				tt.log()
 			}
 		})
 	}
