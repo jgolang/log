@@ -66,6 +66,14 @@ func Level() slog.Level {
 	return level.Level()
 }
 
+// levelEnabled reports whether package-level logs at lvl are written. The
+// helpers check it before validateArgs, whose error handling (message,
+// errors.As, code lookup, stack) is wasted work for a disabled level. The std
+// handlers read the same level variable, so the answers match.
+func levelEnabled(lvl slog.Level) bool {
+	return lvl >= level.Level()
+}
+
 // codedErrorOf returns the first jgolang/errors error in err's chain, or nil.
 // The type assertion keeps the common unwrapped case free of the allocation
 // errors.As costs; errors.As finds one behind wrappers such as fmt.Errorf.

@@ -1,11 +1,17 @@
 package log
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // Debug logs a debug-level message using the global logger.
 // msg: The message to log.
 // args: Additional arguments to format the message.
 func Debug(args ...any) {
+	if !levelEnabled(slog.LevelDebug) {
+		return
+	}
 	msg, attrs := validateArgs(args...)
 	std.Debug(msg, attrs...)
 }
@@ -15,6 +21,9 @@ func Debug(args ...any) {
 // msg: The message to log.
 // args: Additional arguments to format the message.
 func DebugC(ctx context.Context, args ...any) {
+	if !levelEnabled(slog.LevelDebug) {
+		return
+	}
 	msg, attrs := validateArgs(args...)
 	std.DebugContext(ctx, msg, attrs...)
 }
@@ -23,6 +32,9 @@ func DebugC(ctx context.Context, args ...any) {
 // msg: The message to log.
 // args: Additional arguments to format the message.
 func Warn(args ...any) {
+	if !levelEnabled(slog.LevelWarn) {
+		return
+	}
 	msg, attrs := validateArgs(args...)
 	std.Warn(msg, attrs...)
 }
@@ -32,6 +44,9 @@ func Warn(args ...any) {
 // msg: The message to log.
 // args: Additional arguments to format the message.
 func WarnC(ctx context.Context, args ...interface{}) {
+	if !levelEnabled(slog.LevelWarn) {
+		return
+	}
 	msg, attrs := validateArgs(args...)
 	std.WarnContext(ctx, msg, attrs...)
 }
