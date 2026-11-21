@@ -60,6 +60,12 @@
 // The package does not depend on environment variables, and debug stack
 // traces are opt-in.
 //
+// SetHandlerWrapper and the WithHandlerWrapper option wrap the handler the
+// logger builds, for example with the otel module's handler, which adds trace
+// correlation to records logged with a context:
+//
+//	log.SetHandlerWrapper(otel.NewOtelHandler())
+//
 // The otel module (github.com/jgolang/log/otel) disables baggage logging by default. If baggage is
 // enabled, prefer allow-lists or explicit filters so sensitive context values
 // are not written to logs accidentally.

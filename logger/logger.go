@@ -26,6 +26,13 @@ type Logger struct {
 	debugStack bool
 	mu         sync.RWMutex
 	logger     *slog.Logger
+	// handler is the JSON or text handler the logger built, before wrap is
+	// applied. Both are kept so that changing either rebuilds logger.
+	handler slog.Handler
+	wrap    func(slog.Handler) slog.Handler
+	// rebuildMu serializes handler rebuilds, so wrap runs outside mu: a
+	// wrapper that logs through this logger needs mu to read the backend.
+	rebuildMu sync.Mutex
 }
 
 type loggerConfig struct {
@@ -67,6 +74,17 @@ func WithJSONHandler(w io.Writer) Option {
 func WithTextHandler(w io.Writer) Option {
 	return func(l *Logger) {
 		l.SetTextHandler(w)
+	}
+}
+
+// WithHandlerWrapper wraps the JSON or text handler the logger builds with
+// wrap, for example to add OpenTelemetry trace correlation. Level filtering
+// and attribute normalization keep working because the built handler still
+// encodes the record. The wrapper is kept across handler changes, so the
+// option works in any order. See Logger.SetHandlerWrapper.
+func WithHandlerWrapper(wrap func(slog.Handler) slog.Handler) Option {
+	return func(l *Logger) {
+		l.SetHandlerWrapper(wrap)
 	}
 }
 
@@ -112,10 +130,61 @@ func (l *Logger) snapshot() loggerConfig {
 	}
 }
 
-func (l *Logger) setBackend(next *slog.Logger) {
+// setBackend stores the built handler and rebuilds the backend with the
+// current wrapper.
+func (l *Logger) setBackend(handler slog.Handler) {
+	l.rebuildMu.Lock()
+	defer l.rebuildMu.Unlock()
+
+	l.mu.RLock()
+	wrap := l.wrap
+	l.mu.RUnlock()
+
+	next := slog.New(wrapHandler(handler, wrap))
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.handler = handler
 	l.logger = next
+}
+
+// wrapHandler applies wrap to handler. A wrapper that returns nil is ignored
+// rather than left to panic in slog.New.
+func wrapHandler(handler slog.Handler, wrap func(slog.Handler) slog.Handler) slog.Handler {
+	if wrap == nil {
+		return handler
+	}
+	if wrapped := wrap(handler); wrapped != nil {
+		return wrapped
+	}
+	return handler
+}
+
+// SetHandlerWrapper wraps the JSON or text handler the logger builds with
+// wrap, now and after later SetJSONHandler or SetTextHandler calls. A nil
+// wrap removes the wrapper. If wrap returns nil, the built handler is used
+// unwrapped. wrap may log through this logger; it must not configure it.
+func (l *Logger) SetHandlerWrapper(wrap func(slog.Handler) slog.Handler) {
+	l.rebuildMu.Lock()
+	defer l.rebuildMu.Unlock()
+
+	l.mu.RLock()
+	handler := l.handler
+	l.mu.RUnlock()
+
+	// A zero-value Logger has no built handler yet; the wrapper applies once
+	// SetJSONHandler or SetTextHandler builds one.
+	var next *slog.Logger
+	if handler != nil {
+		next = slog.New(wrapHandler(handler, wrap))
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.wrap = wrap
+	if next != nil {
+		l.logger = next
+	}
 }
 
 // log is called directly by every exported logging method, so that a
@@ -143,7 +212,7 @@ func (l *Logger) SetJSONHandler(w io.Writer) {
 		Level:       l.level,
 		ReplaceAttr: ReplaceAttr,
 	}
-	l.setBackend(slog.New(slog.NewJSONHandler(w, opts)))
+	l.setBackend(slog.NewJSONHandler(w, opts))
 }
 
 // SetTextHandler configures the logger to emit text logs to the provided writer.
@@ -152,7 +221,7 @@ func (l *Logger) SetTextHandler(w io.Writer) {
 		Level:       l.level,
 		ReplaceAttr: ReplaceAttr,
 	}
-	l.setBackend(slog.New(slog.NewTextHandler(w, opts)))
+	l.setBackend(slog.NewTextHandler(w, opts))
 }
 
 // Debug logs a debug-level message with optional arguments.
