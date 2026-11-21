@@ -94,7 +94,7 @@ logger.Info("service started")
 
 ### Handler wrappers
 
-`WithHandlerWrapper` (instance) and `SetHandlerWrapper` (package-level logger) wrap the JSON or text handler the logger builds with any `func(slog.Handler) slog.Handler`, such as the `otel` handler below. The built handler still encodes the record, so the level, the custom level names and `source` keep working. The wrapper is kept when the handler changes later (`SetJSONHandler`, `SetTextHandler`, `NewJSONHandler`, `NewTextHandler`), so the option order does not matter. A nil wrapper removes it.
+`WithHandlerWrapper` (instance) and `SetHandlerWrapper` (package-level logger) wrap the JSON or text handler the logger builds with any `func(slog.Handler) slog.Handler`, such as the `otel` handler below. The built handler still encodes the record, so the level, the custom level names and `source` keep working. Since v1.7.5 the record a wrapper receives carries the caller's program counter in `record.PC`, the same call site as `source`, so a wrapper with `AddSource` or a bridge that reads `record.PC` reports the code that logged. The wrapper is kept when the handler changes later (`SetJSONHandler`, `SetTextHandler`, `NewJSONHandler`, `NewTextHandler`), so the option order does not matter. A nil wrapper removes it.
 
 ## OpenTelemetry
 

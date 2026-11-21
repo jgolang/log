@@ -35,6 +35,14 @@ func callers(skip, depth int) []uintptr {
 	return pcs[:runtime.Callers(skip, pcs)]
 }
 
+// callerPC returns the first program counter callers(skip, 1) would return,
+// without allocating, or 0 when the stack is shorter than skip.
+func callerPC(skip int) uintptr {
+	var pcs [1]uintptr
+	runtime.Callers(skip, pcs[:])
+	return pcs[0]
+}
+
 // sourceAttr builds the "source" group from pcs, whose first entry is the
 // call site to report. withStack adds a stack trace that starts at that call
 // site.
