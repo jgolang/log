@@ -4,7 +4,7 @@
 // do not depend on OpenTelemetry; it has been since log v1.5.0. Upgrading from
 // log v1.4.x or earlier, raise both modules together:
 //
-//	go get github.com/jgolang/log@v1.6.0 github.com/jgolang/log/otel@v1.6.0
+//	go get github.com/jgolang/log@latest github.com/jgolang/log/otel@latest
 //
 // Attach the handler to a jgolang logger with log.SetHandlerWrapper or the
 // log.WithHandlerWrapper option (log v1.6.0 or later):
