@@ -149,4 +149,4 @@ traces before changing logger internals.
 
 <hr>
 
-Released under the [GPL-3.0](LICENSE).
+Released under the [MIT License](LICENSE).
