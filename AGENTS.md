@@ -16,14 +16,17 @@
 
 ## Commands
 
+The checks CI runs on Go oldstable and stable (`.github/workflows/ci.yml`), in the root and in the nested `otel` module; run them before a change is done:
+
 ```sh
-go vet ./...                                             # from CI: .github/workflows/ci.yml
-go test -race -cover ./...                               # from CI: .github/workflows/ci.yml
-go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...   # from CI: .github/workflows/ci.yml
-go mod edit -replace github.com/jgolang/log=../          # from CI: .github/workflows/ci.yml
-go mod tidy                                              # from CI: .github/workflows/ci.yml
-go test -race ./...                                      # from CI: .github/workflows/ci.yml
+test -z "$(gofmt -l .)"
+go vet ./...
+go test -race -cover ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+(cd otel && test -z "$(gofmt -l .)" && go vet ./... && go test -race -cover ./... && go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...)
 ```
+
+CI also tests `otel` against the root of the same commit with a temporary `go mod edit -replace github.com/jgolang/log=../`; that replace exists only in the CI checkout, never commit it (`.github/workflows/ci.yml`). Releases follow `RELEASE.md`; tag `otel` as `otel/vX.Y.Z`.
 
 ## Inherited rules
 
