@@ -1,6 +1,6 @@
 module github.com/jgolang/log/otel
 
-go 1.26.2
+go 1.26.11
 
 require (
 	github.com/jgolang/log v1.7.6
